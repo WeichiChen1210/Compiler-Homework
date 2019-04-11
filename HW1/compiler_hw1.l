@@ -22,8 +22,8 @@ single_comment "//"([^\n])*"\n"
 
 /* Rules section */
 %%
-"\""	{ BEGIN(string_const); ECHO; printf("\t QUOTA\n");}
-<string_const>"\""	{ BEGIN(INITIAL); printf("\tSTR_CONST\n%s\t QUOTA\n", yytext);}
+"\""	{ BEGIN(string_const); ECHO; printf(" \t QUOTA\n");}
+<string_const>"\""	{ BEGIN(INITIAL); printf(" \t STR_CONST\n%s \t QUOTA\n", yytext);}
 <string_const>.	{ ECHO; }
 "/*"	{ BEGIN(C_COMMENT); ECHO; }
 <C_COMMENT>"*/\n"	{ BEGIN(INITIAL); num_comment++; num_line++; printf("*/ \t C Comment\n"); }

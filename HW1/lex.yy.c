@@ -829,12 +829,12 @@ do_action:	/* This label is used only to access EOF actions. */
 case 1:
 YY_RULE_SETUP
 #line 25 "compiler_hw1.l"
-{ BEGIN(string_const); ECHO; printf("\t QUOTA\n");}
+{ BEGIN(string_const); ECHO; printf(" \t QUOTA\n");}
 	YY_BREAK
 case 2:
 YY_RULE_SETUP
 #line 26 "compiler_hw1.l"
-{ BEGIN(INITIAL); printf("\tSTR_CONST\n%s\t QUOTA\n", yytext);}
+{ BEGIN(INITIAL); printf(" \t STR_CONST\n%s \t QUOTA\n", yytext);}
 	YY_BREAK
 case 3:
 YY_RULE_SETUP
