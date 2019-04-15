@@ -11,11 +11,11 @@
 %x string_const
 %x C_COMMENT
 %x CPLUS_COMMENT
-letter [a-zA-Z]
+letter [_a-zA-Z]
 digit [0-9]
 id {letter}+({letter}|{digit})*
-number {digit}+
-float_number {digit}*"."{digit}+
+number [-]?{digit}+
+float_number [-]?{digit}*"."{digit}+
 string_constants \"([^\\\"]|\\.)*\"
 comment "/*"([^*]|\*+[^*/])*"*/" 
 single_comment "//"([^\n])*"\n"
@@ -25,10 +25,12 @@ single_comment "//"([^\n])*"\n"
 "\""	{ BEGIN(string_const); ECHO; printf(" \t QUOTA\n");}
 <string_const>"\""	{ BEGIN(INITIAL); printf(" \t STR_CONST\n%s \t QUOTA\n", yytext);}
 <string_const>.	{ ECHO; }
+
 "/*"	{ BEGIN(C_COMMENT); ECHO; }
-<C_COMMENT>"*/\n"	{ BEGIN(INITIAL); num_comment++; num_line++; printf("*/ \t C Comment\n"); }
 <C_COMMENT>\n	{ num_comment++; num_line++; ECHO; }
+<C_COMMENT>"*/"	{ BEGIN(INITIAL); num_comment++; printf("*/ \t C Comment\n"); }
 <C_COMMENT>.	{ ECHO; }
+
 "//"	{ BEGIN(CPLUS_COMMENT); ECHO; }
 <CPLUS_COMMENT>\n	{ BEGIN(INITIAL); num_comment++; num_line++; printf(" \t C++ Comment\n"); }
 <CPLUS_COMMENT>.	{ ECHO; }
