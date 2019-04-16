@@ -11,10 +11,10 @@
 %x string_const
 %x C_COMMENT
 %x CPLUS_COMMENT
-letter [_a-zA-Z]
+letter [a-zA-Z]
 digit [0-9]
 id {letter}+({letter}|{digit})*
-number [-]?{digit}+
+number {digit}+
 float_number [-]?{digit}*"."{digit}+
 string_constants \"([^\\\"]|\\.)*\"
 comment "/*"([^*]|\*+[^*/])*"*/" 
@@ -23,6 +23,7 @@ single_comment "//"([^\n])*"\n"
 /* Rules section */
 %%
 "\""	{ BEGIN(string_const); ECHO; printf(" \t QUOTA\n");}
+<string_const>"\\\""	{ ECHO; }
 <string_const>"\""	{ BEGIN(INITIAL); printf(" \t STR_CONST\n%s \t QUOTA\n", yytext);}
 <string_const>.	{ ECHO; }
 
