@@ -28,21 +28,21 @@ void dump_symbol();
 %token ADD SUB MUL DIV MOD INC DEC                  // Arithmetic
 %token MT LT MTE LTE EQ NE                          // Relational
 %token ASGN ADDASGN SUBASGN MULASGN DIVASGN MODASGN // Assignment
-%token AND OR NOT
+%token AND OR NOT                                   // Logical
 %token LB RB LCB RCB LSB RSB COMMA                  // Delimiters
-%token IF ELSE FOR WHILE BREAK CONT PRINT                // Conditions and loops
-%token TRUE FALSE RET                               // boolean
-%token ID SEMICOLON COMMENT
+%token IF ELSE FOR WHILE BREAK CONT PRINT           // Conditions and loops
+%token RET                               // boolean
+%token ID SEMICOLON C_COMMENT CPLUS_COMMENT
 
 /* Token with return, which need to sepcify type */
 %token <i_val> I_CONST
 %token <f_val> F_CONST
 %token <string> STR_CONST;
-%token <string> STRING INT FLOAT BOOL VOID
+%token <string> STRING INT FLOAT BOOL VOID TRUE FALSE
 
 /* Nonterminal with return, which need to sepcify type */
-%type <f_val> stat compound_statement expression_statement initializer print_func
-%type <string> type 
+// %type <f_val> stat compound_statement expression_statement initializer print_func
+%type <string> type_specifier 
 
 /* Yacc will start at this nonterminal */
 %start translation_unit
@@ -81,34 +81,30 @@ declaration_list
     ;
 
 compound_statement
-    : '{' '}'
-    | '{' statement_list '}'
-    | '{' declaration_list '}'
-    | '{' declaration_list statement_list '}'
+    : LCB RCB
+    | LCB statement_list RCB
+    | LCB declaration_list RCB
+    | LCB declaration_list statement_list RCB
     ;
 
 direct_declarator
     : ID
-    | '(' declarator ')'
-    | direct_declarator '[' constant_expression ']'
-    | direct_declarator '[' ']'
-    | direct_declarator '(' parameter_type_list ')'
-    | direct_declarator '(' identifier_list ')'
-    | direct_declarator '(' ')'
+    | LB declarator RB
+    | direct_declarator LSB conditional_expression RSB
+    | direct_declarator LSB RSB
+    | direct_declarator LB parameter_type_list RB
+    | direct_declarator LB identifier_list RB
+    | direct_declarator LB RB
     ;
 
 declaration
-    : declaration_specifiers ';'
-    | declaration_specifiers init_declarator_list ';'
+    : declaration_specifiers SEMICOLON
+    | declaration_specifiers init_declarator_list SEMICOLON
     ;
 
 statement_list
     : statement
     | statement_list statement
-    ;
-
-constant_expression
-    : conditional_expression
     ;
 
 parameter_type_list
@@ -117,12 +113,12 @@ parameter_type_list
 
 identifier_list
     : ID
-    | identifier_list ',' ID
+    | identifier_list COMMA ID
     ;
 
 init_declarator_list
     : init_declarator
-    | init_declarator_list ',' init_declarator
+    | init_declarator_list COMMA init_declarator
     ;
 
 statement
@@ -135,42 +131,39 @@ statement
 
 conditional_expression
     : logical_or_expression
-    | logical_or_expression '?' expression ':' conditional_expression
     ;
 
 parameter_list
     : parameter_declaration
-    | parameter_list ',' parameter_declaration
+    | parameter_list COMMA parameter_declaration
     ;
 
 init_declarator
     : declarator
-    | declarator '=' initializer
+    | declarator ASGN initializer
     ;
 
 expression_statement
-    : ','
-    | expression ';'
+    : COMMA
+    | expression SEMICOLON
     ;
 
 selection_statement
-    : IF '(' expression ')' statement
-    | IF '(' expression ')' statement ELSE statement
-    | SWITCH '(' expression ')' statement
+    : IF LB expression RB statement
+    | IF LB expression RB statement ELSE statement
     ;
 
 iteration_statement
-    : WHILE '(' expression ')' statement
-    | DO statement WHILE '(' expression ')'
-    | FOR '(' expression_statement expression_statement ')' statement
-    | FOR '(' expression_statement expression_statement expression ')' statement
+    : WHILE LB expression RB statement
+    | FOR LB expression_statement expression_statement RB statement
+    | FOR LB expression_statement expression_statement expression RB statement
     ;
 
 jump_statement
-    : CONT ';'
-    | BREAK ';'
-    | RET ';'
-    | RET expression ';'
+    : CONT SEMICOLON
+    | BREAK SEMICOLON
+    | RET SEMICOLON
+    | RET expression SEMICOLON
     ;
 
 logical_or_expression
@@ -180,7 +173,7 @@ logical_or_expression
 
 expression
     : assignment_expression
-    | expression ',' assignment_expression
+    | expression COMMA assignment_expression
     ;
 
 parameter_declaration
@@ -190,8 +183,8 @@ parameter_declaration
 
 initializer
     : assignment_expression
-    | '{' initializer_list '}'
-    | '{' initializer_list ',' '}'
+    | LCB initializer_list RCB
+    | LCB initializer_list COMMA RCB
     ;
 
 logical_and_expression
@@ -206,24 +199,93 @@ assignment_expression
 
 initializer_list
     : initializer
-    | initializer_list ';' initializer
+    | initializer_list SEMICOLON initializer
     ;
 
 inclusive_or_expression
     : exclusive_or_expression
-    | inclusive_or_expression '|' exclusive_or_expression
     ;
 
 unary_expression
     : postfix_expression
     | INC unary_expression
     | DEC unary_expression
+    | unary_operator unary_expression
     ;
 
+assignment_operator
+    : ASGN
+    | ADDASGN
+    | SUBASGN
+    | MULASGN
+    | DIVASGN
+    | MODASGN
+    ;
 
+exclusive_or_expression
+    : and_expression
+    ;
 
+postfix_expression
+    : primary_expression
+    | postfix_expression LSB expression RSB
+    | postfix_expression LB RB
+    | postfix_expression LB argument_expression_list RB
+    | postfix_expression INC
+    | postfix_expression DEC
+    ;
 
+unary_operator
+    : ADD
+    | SUB
+    | NOT
+    ;
 
+and_expression
+    : equality_expression
+    ;
+
+primary_expression
+    : ID
+    | I_CONST
+    | F_CONST
+    | STR_CONST
+    | TRUE
+    | FALSE
+    | LB expression RB
+    ;
+
+argument_expression_list
+    : assignment_expression
+    | argument_expression_list COMMA assignment_expression
+    ;
+
+equality_expression
+    : relational_expression
+    | equality_expression EQ relational_expression
+    | equality_expression NE relational_expression
+    ;
+
+relational_expression
+    : additive_expression
+    | relational_expression LT additive_expression
+    | relational_expression MT additive_expression
+    | relational_expression LTE additive_expression
+    | relational_expression MTE additive_expression
+    ;
+
+additive_expression
+    : multiplicative_expression
+    | additive_expression ADD multiplicative_expression
+    | additive_expression SUB multiplicative_expression
+    ;
+
+multiplicative_expression
+    : unary_expression
+    | multiplicative_expression MUL unary_expression
+    | multiplicative_expression DIV unary_expression
+    | multiplicative_expression MOD unary_expression
+    ;
 
 /* actions can be taken when meet the token or rule */
 type_specifier

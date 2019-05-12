@@ -79,13 +79,13 @@ extern int yydebug;
     FOR = 289,
     WHILE = 290,
     BREAK = 291,
-    PRINT = 292,
-    TRUE = 293,
-    FALSE = 294,
-    RET = 295,
-    ID = 296,
-    SEMICOLON = 297,
-    COMMENT = 298,
+    CONT = 292,
+    PRINT = 293,
+    RET = 294,
+    ID = 295,
+    SEMICOLON = 296,
+    C_COMMENT = 297,
+    CPLUS_COMMENT = 298,
     I_CONST = 299,
     F_CONST = 300,
     STR_CONST = 301,
@@ -93,7 +93,9 @@ extern int yydebug;
     INT = 303,
     FLOAT = 304,
     BOOL = 305,
-    VOID = 306
+    VOID = 306,
+    TRUE = 307,
+    FALSE = 308
   };
 #endif
 /* Tokens.  */
@@ -131,13 +133,13 @@ extern int yydebug;
 #define FOR 289
 #define WHILE 290
 #define BREAK 291
-#define PRINT 292
-#define TRUE 293
-#define FALSE 294
-#define RET 295
-#define ID 296
-#define SEMICOLON 297
-#define COMMENT 298
+#define CONT 292
+#define PRINT 293
+#define RET 294
+#define ID 295
+#define SEMICOLON 296
+#define C_COMMENT 297
+#define CPLUS_COMMENT 298
 #define I_CONST 299
 #define F_CONST 300
 #define STR_CONST 301
@@ -146,19 +148,21 @@ extern int yydebug;
 #define FLOAT 304
 #define BOOL 305
 #define VOID 306
+#define TRUE 307
+#define FALSE 308
 
 /* Value type.  */
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 
 union YYSTYPE
 {
-#line 19 "compiler_hw2.y" /* yacc.c:1909  */
+#line 21 "compiler_hw2.y" /* yacc.c:1909  */
 
     int i_val;
     double f_val;
     char* string;
 
-#line 162 "y.tab.h" /* yacc.c:1909  */
+#line 166 "y.tab.h" /* yacc.c:1909  */
 };
 
 typedef union YYSTYPE YYSTYPE;

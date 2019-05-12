@@ -5,7 +5,7 @@
 
 extern YYSTYPE yylval; //YYSTYPE
 char buf[BUF_SIZE];
-
+int line_num = 0;
 /* This macro is used to record code line */
 #define CONCAT { strncat(buf, yytext, BUF_SIZE - strlen(buf) - 1); }
 %}
@@ -47,7 +47,7 @@ id			{letter}+({letter}|{digit})*
 "-="	{ return SUBASGN; }
 "*="	{ return MULASGN; }
 "/="	{ return DIVASGN; }
-"%="	{ return MODASGN;}
+"%="	{ return MODASGN; }
 
  /* Logical */
 "&&"	{ return AND; }
@@ -90,7 +90,7 @@ id			{letter}+({letter}|{digit})*
  /* String Constant */
 \"				        { BEGIN STRING_STATE; }
 <STRING_STATE>\"		{ BEGIN INITIAL; return STRING; }
-<STRING_STATE>[^"]*		{  }
+<STRING_STATE>[^"]*		{ ; }
 
  /* Number Constant */
 {integer}	{ return I_CONST; }
@@ -98,13 +98,13 @@ id			{letter}+({letter}|{digit})*
 
  /* C type Comment */
 "/*"				{ BEGIN COMMENT; }
-<COMMENT>[^*\n]+	{  }
-<COMMENT>\n			{  }
-<COMMENT>"*"		{  }
-<COMMENT>"*/"		{ BEGIN INITIAL; return COMMENT;}
+<COMMENT>[^*\n]+	{ ; }
+<COMMENT>\n			{ line_num++; }
+<COMMENT>"*"		{ ; }
+<COMMENT>"*/"		{ BEGIN INITIAL;}
 
  /* C++ type Comment */
-\/\/.*	{ return COMMENT; }
+\/\/.*	{ ; }
 
  /* Variable ID */
  {id}       { return ID; }
@@ -112,9 +112,9 @@ id			{letter}+({letter}|{digit})*
  /* others */
 
 [;]         { return SEMICOLON; }
-[\n]        {  }
-[ \t]		{ } /* Ignore */
-[^ \t\n] 	{ } /* Ignore other charactor sets */
+[\n]        { line_num++; }
+[ \t]		{ ; } /* Ignore */
+[^ \t\n] 	{ ; } /* Ignore other charactor sets */
 <<EOF>>     { }
 
 %%
