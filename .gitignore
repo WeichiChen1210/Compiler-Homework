@@ -1,3 +1,5 @@
 # .gitignore
 
 HW1/.vscode
+HW2/.vscode
+*.pdf

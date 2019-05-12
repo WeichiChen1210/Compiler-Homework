@@ -1,0 +1,336 @@
+Terminals unused in grammar
+
+   ADD
+   SUB
+   MUL
+   DIV
+   MOD
+   INC
+   DEC
+   MT
+   LT
+   MTE
+   LTE
+   EQ
+   NE
+   ASGN
+   ADDASGN
+   SUBASGN
+   MULASGN
+   DIVASGN
+   MODASGN
+   AND
+   OR
+   NOT
+   LB
+   RB
+   LCB
+   RCB
+   LSB
+   RSB
+   COMMA
+   IF
+   ELSE
+   FOR
+   WHILE
+   BREAK
+   PRINT
+   TRUE
+   FALSE
+   RET
+   COMMENT
+   I_CONST
+   F_CONST
+   STR_CONST
+
+
+Rules useless in parser due to conflicts
+
+    9 compound_stat: %empty
+
+   10 expression_stat: %empty
+
+   12 print_func: %empty
+
+
+State 1 conflicts: 6 shift/reduce, 6 reduce/reduce
+
+
+Grammar
+
+    0 $accept: program $end
+
+    1 program: program stat
+    2        | %empty
+
+    3 stat: declaration
+    4     | compound_stat
+    5     | expression_stat
+    6     | print_func
+
+    7 declaration: type ID '=' initializer SEMICOLON
+    8            | type ID SEMICOLON
+
+    9 compound_stat: %empty
+
+   10 expression_stat: %empty
+
+   11 initializer: %empty
+
+   12 print_func: %empty
+
+   13 type: INT
+   14     | FLOAT
+   15     | BOOL
+   16     | STRING
+   17     | VOID
+
+
+Terminals, with rules where they appear
+
+$end (0) 0
+'=' (61) 7
+error (256)
+ADD (258)
+SUB (259)
+MUL (260)
+DIV (261)
+MOD (262)
+INC (263)
+DEC (264)
+MT (265)
+LT (266)
+MTE (267)
+LTE (268)
+EQ (269)
+NE (270)
+ASGN (271)
+ADDASGN (272)
+SUBASGN (273)
+MULASGN (274)
+DIVASGN (275)
+MODASGN (276)
+AND (277)
+OR (278)
+NOT (279)
+LB (280)
+RB (281)
+LCB (282)
+RCB (283)
+LSB (284)
+RSB (285)
+COMMA (286)
+IF (287)
+ELSE (288)
+FOR (289)
+WHILE (290)
+BREAK (291)
+PRINT (292)
+TRUE (293)
+FALSE (294)
+RET (295)
+ID (296) 7 8
+SEMICOLON (297) 7 8
+COMMENT (298)
+I_CONST (299)
+F_CONST (300)
+STR_CONST (301)
+STRING (302) 16
+INT (303) 13
+FLOAT (304) 14
+BOOL (305) 15
+VOID (306) 17
+
+
+Nonterminals, with rules where they appear
+
+$accept (53)
+    on left: 0
+program (54)
+    on left: 1 2, on right: 0 1
+stat (55)
+    on left: 3 4 5 6, on right: 1
+declaration (56)
+    on left: 7 8, on right: 3
+compound_stat (57)
+    on left: 9, on right: 4
+expression_stat (58)
+    on left: 10, on right: 5
+initializer (59)
+    on left: 11, on right: 7
+print_func (60)
+    on left: 12, on right: 6
+type (61)
+    on left: 13 14 15 16 17, on right: 7 8
+
+
+State 0
+
+    0 $accept: . program $end
+
+    $default  reduce using rule 2 (program)
+
+    program  go to state 1
+
+
+State 1
+
+    0 $accept: program . $end
+    1 program: program . stat
+
+    $end    shift, and go to state 2
+    STRING  shift, and go to state 3
+    INT     shift, and go to state 4
+    FLOAT   shift, and go to state 5
+    BOOL    shift, and go to state 6
+    VOID    shift, and go to state 7
+
+    $end    [reduce using rule 9 (compound_stat)]
+    $end    [reduce using rule 10 (expression_stat)]
+    $end    [reduce using rule 12 (print_func)]
+    STRING  [reduce using rule 9 (compound_stat)]
+    STRING  [reduce using rule 10 (expression_stat)]
+    STRING  [reduce using rule 12 (print_func)]
+    INT     [reduce using rule 9 (compound_stat)]
+    INT     [reduce using rule 10 (expression_stat)]
+    INT     [reduce using rule 12 (print_func)]
+    FLOAT   [reduce using rule 9 (compound_stat)]
+    FLOAT   [reduce using rule 10 (expression_stat)]
+    FLOAT   [reduce using rule 12 (print_func)]
+    BOOL    [reduce using rule 9 (compound_stat)]
+    BOOL    [reduce using rule 10 (expression_stat)]
+    BOOL    [reduce using rule 12 (print_func)]
+    VOID    [reduce using rule 9 (compound_stat)]
+    VOID    [reduce using rule 10 (expression_stat)]
+    VOID    [reduce using rule 12 (print_func)]
+
+    stat             go to state 8
+    declaration      go to state 9
+    compound_stat    go to state 10
+    expression_stat  go to state 11
+    print_func       go to state 12
+    type             go to state 13
+
+
+State 2
+
+    0 $accept: program $end .
+
+    $default  accept
+
+
+State 3
+
+   16 type: STRING .
+
+    $default  reduce using rule 16 (type)
+
+
+State 4
+
+   13 type: INT .
+
+    $default  reduce using rule 13 (type)
+
+
+State 5
+
+   14 type: FLOAT .
+
+    $default  reduce using rule 14 (type)
+
+
+State 6
+
+   15 type: BOOL .
+
+    $default  reduce using rule 15 (type)
+
+
+State 7
+
+   17 type: VOID .
+
+    $default  reduce using rule 17 (type)
+
+
+State 8
+
+    1 program: program stat .
+
+    $default  reduce using rule 1 (program)
+
+
+State 9
+
+    3 stat: declaration .
+
+    $default  reduce using rule 3 (stat)
+
+
+State 10
+
+    4 stat: compound_stat .
+
+    $default  reduce using rule 4 (stat)
+
+
+State 11
+
+    5 stat: expression_stat .
+
+    $default  reduce using rule 5 (stat)
+
+
+State 12
+
+    6 stat: print_func .
+
+    $default  reduce using rule 6 (stat)
+
+
+State 13
+
+    7 declaration: type . ID '=' initializer SEMICOLON
+    8            | type . ID SEMICOLON
+
+    ID  shift, and go to state 14
+
+
+State 14
+
+    7 declaration: type ID . '=' initializer SEMICOLON
+    8            | type ID . SEMICOLON
+
+    SEMICOLON  shift, and go to state 15
+    '='        shift, and go to state 16
+
+
+State 15
+
+    8 declaration: type ID SEMICOLON .
+
+    $default  reduce using rule 8 (declaration)
+
+
+State 16
+
+    7 declaration: type ID '=' . initializer SEMICOLON
+
+    $default  reduce using rule 11 (initializer)
+
+    initializer  go to state 17
+
+
+State 17
+
+    7 declaration: type ID '=' initializer . SEMICOLON
+
+    SEMICOLON  shift, and go to state 18
+
+
+State 18
+
+    7 declaration: type ID '=' initializer SEMICOLON .
+
+    $default  reduce using rule 7 (declaration)
