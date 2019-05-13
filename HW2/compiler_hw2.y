@@ -7,6 +7,7 @@ extern int yylex();
 extern char* yytext;   // Get current token from lex
 extern char buf[256];  // Get current code line from lex
 
+int scope_num = 0;
 /* Symbol table function - you can add new function if needed. */
 int lookup_symbol();
 void create_symbol();
@@ -31,7 +32,7 @@ void dump_symbol();
 %token AND OR NOT                                   // Logical
 %token LB RB LCB RCB LSB RSB COMMA                  // Delimiters
 %token IF ELSE FOR WHILE BREAK CONT PRINT           // Conditions and loops
-%token RET                               // boolean
+%token RET QUOTA                                    // boolean
 %token ID SEMICOLON C_COMMENT CPLUS_COMMENT
 
 /* Token with return, which need to sepcify type */
@@ -127,6 +128,7 @@ statement
     | selection_statement
     | iteration_statement
     | jump_statement
+    | print_statement
     ;
 
 conditional_expression
@@ -164,6 +166,11 @@ jump_statement
     | BREAK SEMICOLON
     | RET SEMICOLON
     | RET expression SEMICOLON
+    ;
+
+print_statement
+    : PRINT LB ID RB SEMICOLON
+    | PRINT LB QUOTA STR_CONST QUOTA RB SEMICOLON
     ;
 
 logical_or_expression
@@ -249,7 +256,7 @@ primary_expression
     : ID
     | I_CONST
     | F_CONST
-    | STR_CONST
+    | QUOTA STR_CONST QUOTA
     | TRUE
     | FALSE
     | LB expression RB
@@ -302,9 +309,9 @@ type_specifier
 int main(int argc, char** argv)
 {
     yylineno = 0;
-
+    printf("1: ");
     yyparse();
-	printf("\nTotal lines: %d \n",yylineno);
+	printf("\nTotal lines: %d \n",yylineno+1);
 
     return 0;
 }
@@ -312,7 +319,7 @@ int main(int argc, char** argv)
 void yyerror(char *s)
 {
     printf("\n|-----------------------------------------------|\n");
-    printf("| Error found in line %d: %s\n", yylineno, buf);
+    printf("| Error found in line %d: %s\n", yylineno+1, buf);
     printf("| %s", s);
     printf("\n|-----------------------------------------------|\n\n");
 }

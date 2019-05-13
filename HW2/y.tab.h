@@ -82,20 +82,21 @@ extern int yydebug;
     CONT = 292,
     PRINT = 293,
     RET = 294,
-    ID = 295,
-    SEMICOLON = 296,
-    C_COMMENT = 297,
-    CPLUS_COMMENT = 298,
-    I_CONST = 299,
-    F_CONST = 300,
-    STR_CONST = 301,
-    STRING = 302,
-    INT = 303,
-    FLOAT = 304,
-    BOOL = 305,
-    VOID = 306,
-    TRUE = 307,
-    FALSE = 308
+    QUOTA = 295,
+    ID = 296,
+    SEMICOLON = 297,
+    C_COMMENT = 298,
+    CPLUS_COMMENT = 299,
+    I_CONST = 300,
+    F_CONST = 301,
+    STR_CONST = 302,
+    STRING = 303,
+    INT = 304,
+    FLOAT = 305,
+    BOOL = 306,
+    VOID = 307,
+    TRUE = 308,
+    FALSE = 309
   };
 #endif
 /* Tokens.  */
@@ -136,20 +137,21 @@ extern int yydebug;
 #define CONT 292
 #define PRINT 293
 #define RET 294
-#define ID 295
-#define SEMICOLON 296
-#define C_COMMENT 297
-#define CPLUS_COMMENT 298
-#define I_CONST 299
-#define F_CONST 300
-#define STR_CONST 301
-#define STRING 302
-#define INT 303
-#define FLOAT 304
-#define BOOL 305
-#define VOID 306
-#define TRUE 307
-#define FALSE 308
+#define QUOTA 295
+#define ID 296
+#define SEMICOLON 297
+#define C_COMMENT 298
+#define CPLUS_COMMENT 299
+#define I_CONST 300
+#define F_CONST 301
+#define STR_CONST 302
+#define STRING 303
+#define INT 304
+#define FLOAT 305
+#define BOOL 306
+#define VOID 307
+#define TRUE 308
+#define FALSE 309
 
 /* Value type.  */
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
@@ -162,7 +164,7 @@ union YYSTYPE
     double f_val;
     char* string;
 
-#line 166 "y.tab.h" /* yacc.c:1909  */
+#line 168 "y.tab.h" /* yacc.c:1909  */
 };
 
 typedef union YYSTYPE YYSTYPE;
