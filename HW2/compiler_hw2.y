@@ -7,7 +7,21 @@ extern int yylex();
 extern char* yytext;   // Get current token from lex
 extern char buf[256];  // Get current code line from lex
 
+int err_flag = 0;
 int scope_num = 0;
+
+struct symbols{
+    char name[50];
+    char kind[50];
+    char type[10];
+    int scope;
+    char attribute[50];
+
+    struct symbols *next;
+};
+
+struct symbols table[200];
+
 /* Symbol table function - you can add new function if needed. */
 int lookup_symbol();
 void create_symbol();
@@ -23,6 +37,7 @@ void dump_symbol();
     int i_val;
     double f_val;
     char* string;
+    _Bool b_val;
 }
 
 /* Token without return */
@@ -39,7 +54,8 @@ void dump_symbol();
 %token <i_val> I_CONST
 %token <f_val> F_CONST
 %token <string> STR_CONST;
-%token <string> STRING INT FLOAT BOOL VOID TRUE FALSE
+%token <string> STRING INT FLOAT BOOL VOID 
+%token <b_val> TRUE FALSE
 
 /* Nonterminal with return, which need to sepcify type */
 // %type <f_val> stat compound_statement expression_statement initializer print_func
@@ -309,17 +325,18 @@ type_specifier
 int main(int argc, char** argv)
 {
     yylineno = 0;
-    printf("1: ");
     yyparse();
-	printf("\nTotal lines: %d \n",yylineno+1);
+    if(!err_flag) printf("\nTotal lines: %d \n",yylineno);
 
     return 0;
 }
 
 void yyerror(char *s)
 {
+    err_flag = 1;
+    printf("%d: %s\n", yylineno+1, buf);
     printf("\n|-----------------------------------------------|\n");
-    printf("| Error found in line %d: %s\n", yylineno+1, buf);
+    printf("| Error found in line %d: %s\n", ++yylineno, buf);
     printf("| %s", s);
     printf("\n|-----------------------------------------------|\n\n");
 }

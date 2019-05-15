@@ -158,13 +158,14 @@ extern int yydebug;
 
 union YYSTYPE
 {
-#line 21 "compiler_hw2.y" /* yacc.c:1909  */
+#line 36 "compiler_hw2.y" /* yacc.c:1909  */
 
     int i_val;
     double f_val;
     char* string;
+    _Bool b_val;
 
-#line 168 "y.tab.h" /* yacc.c:1909  */
+#line 169 "y.tab.h" /* yacc.c:1909  */
 };
 
 typedef union YYSTYPE YYSTYPE;

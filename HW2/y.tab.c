@@ -71,6 +71,21 @@ extern int yylex();
 extern char* yytext;   // Get current token from lex
 extern char buf[256];  // Get current code line from lex
 
+int err_flag = 0;
+int scope_num = 0;
+
+struct symbols{
+    char name[50];
+    char kind[50];
+    char type[10];
+    int scope;
+    char attribute[50];
+
+    struct symbols *next;
+};
+
+struct symbols table[200];
+
 /* Symbol table function - you can add new function if needed. */
 int lookup_symbol();
 void create_symbol();
@@ -78,7 +93,7 @@ void insert_symbol();
 void dump_symbol();
 
 
-#line 82 "y.tab.c" /* yacc.c:339  */
+#line 97 "y.tab.c" /* yacc.c:339  */
 
 # ifndef YY_NULLPTR
 #  if defined __cplusplus && 201103L <= __cplusplus
@@ -226,13 +241,14 @@ extern int yydebug;
 
 union YYSTYPE
 {
-#line 21 "compiler_hw2.y" /* yacc.c:355  */
+#line 36 "compiler_hw2.y" /* yacc.c:355  */
 
     int i_val;
     double f_val;
     char* string;
+    _Bool b_val;
 
-#line 236 "y.tab.c" /* yacc.c:355  */
+#line 252 "y.tab.c" /* yacc.c:355  */
 };
 
 typedef union YYSTYPE YYSTYPE;
@@ -249,7 +265,7 @@ int yyparse (void);
 
 /* Copy the second part of user declarations.  */
 
-#line 253 "y.tab.c" /* yacc.c:358  */
+#line 269 "y.tab.c" /* yacc.c:358  */
 
 #ifdef short
 # undef short
@@ -551,19 +567,19 @@ static const yytype_uint8 yytranslate[] =
   /* YYRLINE[YYN] -- Source line where rule number YYN was defined.  */
 static const yytype_uint16 yyrline[] =
 {
-       0,    53,    53,    54,    58,    59,    63,    64,    65,    66,
-      70,    71,    75,    79,    80,    84,    85,    86,    87,    91,
-      92,    93,    94,    95,    96,    97,   101,   102,   106,   107,
-     111,   115,   116,   120,   121,   125,   126,   127,   128,   129,
-     130,   134,   138,   139,   143,   144,   148,   149,   153,   154,
-     158,   159,   160,   164,   165,   166,   167,   171,   172,   176,
-     177,   181,   182,   186,   187,   191,   192,   193,   197,   198,
-     202,   203,   207,   208,   212,   216,   217,   218,   219,   223,
-     224,   225,   226,   227,   228,   232,   236,   237,   238,   239,
-     240,   241,   245,   246,   247,   251,   255,   256,   257,   258,
-     259,   260,   261,   265,   266,   270,   271,   272,   276,   277,
-     278,   279,   280,   284,   285,   286,   290,   291,   292,   293,
-     298,   299,   300,   301,   302
+       0,    70,    70,    71,    75,    76,    80,    81,    82,    83,
+      87,    88,    92,    96,    97,   101,   102,   103,   104,   108,
+     109,   110,   111,   112,   113,   114,   118,   119,   123,   124,
+     128,   132,   133,   137,   138,   142,   143,   144,   145,   146,
+     147,   151,   155,   156,   160,   161,   165,   166,   170,   171,
+     175,   176,   177,   181,   182,   183,   184,   188,   189,   193,
+     194,   198,   199,   203,   204,   208,   209,   210,   214,   215,
+     219,   220,   224,   225,   229,   233,   234,   235,   236,   240,
+     241,   242,   243,   244,   245,   249,   253,   254,   255,   256,
+     257,   258,   262,   263,   264,   268,   272,   273,   274,   275,
+     276,   277,   278,   282,   283,   287,   288,   289,   293,   294,
+     295,   296,   297,   301,   302,   303,   307,   308,   309,   310,
+     315,   316,   317,   318,   319
 };
 #endif
 
@@ -1554,37 +1570,37 @@ yyreduce:
   switch (yyn)
     {
         case 120:
-#line 298 "compiler_hw2.y" /* yacc.c:1646  */
+#line 315 "compiler_hw2.y" /* yacc.c:1646  */
     { (yyval.string) = (yyvsp[0].string); }
-#line 1560 "y.tab.c" /* yacc.c:1646  */
+#line 1576 "y.tab.c" /* yacc.c:1646  */
     break;
 
   case 121:
-#line 299 "compiler_hw2.y" /* yacc.c:1646  */
+#line 316 "compiler_hw2.y" /* yacc.c:1646  */
     { (yyval.string) = (yyvsp[0].string); }
-#line 1566 "y.tab.c" /* yacc.c:1646  */
+#line 1582 "y.tab.c" /* yacc.c:1646  */
     break;
 
   case 122:
-#line 300 "compiler_hw2.y" /* yacc.c:1646  */
+#line 317 "compiler_hw2.y" /* yacc.c:1646  */
     { (yyval.string) = (yyvsp[0].string); }
-#line 1572 "y.tab.c" /* yacc.c:1646  */
+#line 1588 "y.tab.c" /* yacc.c:1646  */
     break;
 
   case 123:
-#line 301 "compiler_hw2.y" /* yacc.c:1646  */
+#line 318 "compiler_hw2.y" /* yacc.c:1646  */
     { (yyval.string) = (yyvsp[0].string); }
-#line 1578 "y.tab.c" /* yacc.c:1646  */
+#line 1594 "y.tab.c" /* yacc.c:1646  */
     break;
 
   case 124:
-#line 302 "compiler_hw2.y" /* yacc.c:1646  */
+#line 319 "compiler_hw2.y" /* yacc.c:1646  */
     { (yyval.string) = (yyvsp[0].string); }
-#line 1584 "y.tab.c" /* yacc.c:1646  */
+#line 1600 "y.tab.c" /* yacc.c:1646  */
     break;
 
 
-#line 1588 "y.tab.c" /* yacc.c:1646  */
+#line 1604 "y.tab.c" /* yacc.c:1646  */
       default: break;
     }
   /* User semantic actions sometimes alter yychar, and that requires
@@ -1812,24 +1828,25 @@ yyreturn:
 #endif
   return yyresult;
 }
-#line 305 "compiler_hw2.y" /* yacc.c:1906  */
+#line 322 "compiler_hw2.y" /* yacc.c:1906  */
 
 
 /* C code section */
 int main(int argc, char** argv)
 {
     yylineno = 0;
-    printf("1: ");
     yyparse();
-	printf("\nTotal lines: %d \n",yylineno+1);
+    if(!err_flag) printf("\nTotal lines: %d \n",yylineno);
 
     return 0;
 }
 
 void yyerror(char *s)
 {
+    err_flag = 1;
+    printf("%d: %s\n", yylineno+1, buf);
     printf("\n|-----------------------------------------------|\n");
-    printf("| Error found in line %d: %s\n", yylineno+1, buf);
+    printf("| Error found in line %d: %s\n", ++yylineno, buf);
     printf("| %s", s);
     printf("\n|-----------------------------------------------|\n\n");
 }
