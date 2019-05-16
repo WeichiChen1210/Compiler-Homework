@@ -18,6 +18,7 @@ struct symbols{
     char type[50];
     int scope;
     char attribute[50];
+    int printed;
 
     struct symbols *next;
 };
@@ -62,6 +63,7 @@ void dump_symbol();
 /* Nonterminal with return, which need to sepcify type */
 // %type <f_val> stat compound_statement expression_statement initializer print_func
 %type <string> type_specifier declaration_specifiers declarator declaration init_declarator_list init_declarator
+%type <string> function_definition parameter_list parameter_declaration
 
 /* Yacc will start at this nonterminal */
 %start translation_unit
@@ -80,7 +82,13 @@ external_declaration
 
 function_definition
     : declaration_specifiers declarator declaration_list compound_statement
-    | declaration_specifiers declarator compound_statement  { insert_symbol($2, "function", $1, scope_num, "NULL"); }
+    | declaration_specifiers declarator compound_statement  { char *temp; 
+                                                            temp = strtok($2, ":");
+                                                            $2 = temp;
+                                                            temp = strtok(NULL, ":");
+                                                            insert_symbol($2, "function", $1, scope_num, temp); 
+                                                            dump_symbol(scope_num+1);
+                                                            }
     | declarator declaration_list compound_statement
     | declarator compound_statement
     ;
@@ -107,7 +115,7 @@ declarator
     | LB declarator RB  { ; }
     | declarator LSB conditional_expression RSB
     | declarator LSB RSB
-    | declarator LB in_scope parameter_list RB out_scope {}
+    | declarator LB in_scope parameter_list RB out_scope { strcat($$, ":"); strcat($$, $4); }
     | declarator LB in_scope identifier_list RB out_scope
     | declarator LB RB
     ;
@@ -154,8 +162,8 @@ conditional_expression
     ;
 
 parameter_list
-    : parameter_declaration
-    | parameter_list COMMA parameter_declaration
+    : parameter_declaration { $$ = $1; }
+    | parameter_list COMMA parameter_declaration    { $$ = strcat($1, ", "); $$ = strcat($$, $3); }
     ;
 
 init_declarator
@@ -202,7 +210,7 @@ expression
     ;
 
 parameter_declaration
-    : declaration_specifiers declarator
+    : declaration_specifiers declarator { insert_symbol($2, "parameter", $1, scope_num, "NULL"); $$ = $1; }
     | declaration_specifiers
     ;
 
@@ -329,7 +337,6 @@ int main(int argc, char** argv)
     yylineno = 0;
     create_symbol();
     yyparse();
-    dump_symbol();
     if(!err_flag) printf("\nTotal lines: %d \n",yylineno);
 
     return 0;
@@ -350,42 +357,63 @@ void create_symbol() {
     for(i = 0; i < 200; i++){
         table[i].next = NULL;
         table[i].scope = 0;
+        table[i].printed = -1;
     }
     printf("table create completed\n");
 }
 
 void insert_symbol(char *name, char *kind, char *type, int scope, char *attribute) {
     struct symbols *temp, *new_symbol;
+
     temp = &table[scope];
     while(temp->next != NULL){
         temp = temp->next;
     }
+
     new_symbol = (struct symbols *)malloc(sizeof(struct symbols));
     strcpy(new_symbol->name, name);
     strcpy(new_symbol->kind, kind);
     strcpy(new_symbol->type, type);
-    strcpy(new_symbol->attribute, attribute);
+    if(attribute == NULL || !strcmp(attribute, "NULL")) strcpy(new_symbol->attribute, "\0");
+    else strcpy(new_symbol->attribute, attribute);
     new_symbol->scope = scope;
+    new_symbol->printed = -1;
     new_symbol->next = NULL;
     temp->next = new_symbol;
-
-    return;
 }
 
 int lookup_symbol() {
     
 }
-void dump_symbol() {
+void dump_symbol(int scope) {
     printf("\n%-10s%-10s%-12s%-10s%-10s%-10s\n",
            "Index", "Name", "Kind", "Type", "Scope", "Attribute");
-    struct symbols *temp = &table[0];
+    struct symbols *temp = &table[scope];
+    int count = table[scope].printed;
+
     temp = temp->next;
     int i = 0;
     while(temp != NULL){
-        printf("%-10d%-10s%-12s%-10s%-10d", i, temp->name, temp->kind, temp->type, temp->scope);
-        if(strcmp(temp->attribute, "NULL"))    printf("%-10s\n", temp->attribute);
-        else printf("\n");
+        if(i >= count){
+            printf("%-10d%-10s%-12s%-10s%-10d", i, temp->name, temp->kind, temp->type, temp->scope);
+            if(strcmp(temp->attribute, "\0"))    printf("%-10s\n", temp->attribute);
+            else printf("\n");
+        }
+        
         temp = temp->next;
         i++;
     }
+    printf("\n");
+    
+    table[scope].printed = i;
+    printf("print from %d\n", table[scope].printed);
+}
+
+void add_attribute(int scope){
+    struct symbols *temp = &table[scope-1];
+    int i = 0;
+    while(temp->next != NULL){
+        temp = temp->next;
+    }
+    printf("%s\n", temp->name);
 }
