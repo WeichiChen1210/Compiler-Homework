@@ -1,6 +1,8 @@
 /*	Definition section */
 %{
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 extern int yylineno;
 extern int yylex();
@@ -13,7 +15,7 @@ int scope_num = 0;
 struct symbols{
     char name[50];
     char kind[50];
-    char type[10];
+    char type[50];
     int scope;
     char attribute[50];
 
@@ -59,7 +61,7 @@ void dump_symbol();
 
 /* Nonterminal with return, which need to sepcify type */
 // %type <f_val> stat compound_statement expression_statement initializer print_func
-%type <string> type_specifier 
+%type <string> type_specifier declaration_specifiers declarator declaration init_declarator_list init_declarator
 
 /* Yacc will start at this nonterminal */
 %start translation_unit
@@ -78,18 +80,14 @@ external_declaration
 
 function_definition
     : declaration_specifiers declarator declaration_list compound_statement
-    | declaration_specifiers declarator compound_statement
+    | declaration_specifiers declarator compound_statement  { insert_symbol($2, "function", $1, scope_num, "NULL"); }
     | declarator declaration_list compound_statement
     | declarator compound_statement
     ;
 
 declaration_specifiers
-    : type_specifier
-    | type_specifier declaration_specifiers
-    ;
-
-declarator
-    : direct_declarator
+    : type_specifier    { $$ = $1; }
+    | type_specifier declaration_specifiers { ; }
     ;
 
 declaration_list
@@ -99,33 +97,37 @@ declaration_list
 
 compound_statement
     : LCB RCB
-    | LCB statement_list RCB
-    | LCB declaration_list RCB
-    | LCB declaration_list statement_list RCB
+    | LCB in_scope statement_list RCB out_scope
+    | LCB in_scope declaration_list RCB out_scope
+    | LCB in_scope declaration_list statement_list RCB out_scope
     ;
 
-direct_declarator
-    : ID
-    | LB declarator RB
-    | direct_declarator LSB conditional_expression RSB
-    | direct_declarator LSB RSB
-    | direct_declarator LB parameter_type_list RB
-    | direct_declarator LB identifier_list RB
-    | direct_declarator LB RB
+declarator
+    : ID                { $$ = strdup(yytext); }
+    | LB declarator RB  { ; }
+    | declarator LSB conditional_expression RSB
+    | declarator LSB RSB
+    | declarator LB in_scope parameter_list RB out_scope {}
+    | declarator LB in_scope identifier_list RB out_scope
+    | declarator LB RB
+    ;
+
+in_scope
+    : { scope_num++; }
+    ;
+
+out_scope
+    : { scope_num--; }
     ;
 
 declaration
     : declaration_specifiers SEMICOLON
-    | declaration_specifiers init_declarator_list SEMICOLON
+    | declaration_specifiers init_declarator_list SEMICOLON     { insert_symbol($2, "variable", $1, scope_num, "NULL");}
     ;
 
 statement_list
     : statement
     | statement_list statement
-    ;
-
-parameter_type_list
-    : parameter_list
     ;
 
 identifier_list
@@ -134,8 +136,8 @@ identifier_list
     ;
 
 init_declarator_list
-    : init_declarator
-    | init_declarator_list COMMA init_declarator
+    : init_declarator                               { $$ = $1; }
+    | init_declarator_list COMMA init_declarator    { ; }
     ;
 
 statement
@@ -157,8 +159,8 @@ parameter_list
     ;
 
 init_declarator
-    : declarator
-    | declarator ASGN initializer
+    : declarator                    { $$ = $1; }
+    | declarator ASGN initializer   { $$ = $1; }
     ;
 
 expression_statement
@@ -312,11 +314,11 @@ multiplicative_expression
 
 /* actions can be taken when meet the token or rule */
 type_specifier
-    : INT { $$ = $1; }
-    | FLOAT { $$ = $1; }
-    | BOOL  { $$ = $1; }
-    | STRING { $$ = $1; }
-    | VOID { $$ = $1; }
+    : INT   { $$ = strdup(yytext); }
+    | FLOAT { $$ = strdup(yytext); }
+    | BOOL  { $$ = strdup(yytext); }
+    | STRING { $$ = strdup(yytext); }
+    | VOID  { $$ = strdup(yytext); }
 ;
 
 %%
@@ -325,7 +327,9 @@ type_specifier
 int main(int argc, char** argv)
 {
     yylineno = 0;
+    create_symbol();
     yyparse();
+    dump_symbol();
     if(!err_flag) printf("\nTotal lines: %d \n",yylineno);
 
     return 0;
@@ -341,10 +345,47 @@ void yyerror(char *s)
     printf("\n|-----------------------------------------------|\n\n");
 }
 
-void create_symbol() {}
-void insert_symbol() {}
-int lookup_symbol() {}
+void create_symbol() {
+    int i;
+    for(i = 0; i < 200; i++){
+        table[i].next = NULL;
+        table[i].scope = 0;
+    }
+    printf("table create completed\n");
+}
+
+void insert_symbol(char *name, char *kind, char *type, int scope, char *attribute) {
+    struct symbols *temp, *new_symbol;
+    temp = &table[scope];
+    while(temp->next != NULL){
+        temp = temp->next;
+    }
+    new_symbol = (struct symbols *)malloc(sizeof(struct symbols));
+    strcpy(new_symbol->name, name);
+    strcpy(new_symbol->kind, kind);
+    strcpy(new_symbol->type, type);
+    strcpy(new_symbol->attribute, attribute);
+    new_symbol->scope = scope;
+    new_symbol->next = NULL;
+    temp->next = new_symbol;
+
+    return;
+}
+
+int lookup_symbol() {
+    
+}
 void dump_symbol() {
-    printf("\n%-10s%-10s%-12s%-10s%-10s%-10s\n\n",
+    printf("\n%-10s%-10s%-12s%-10s%-10s%-10s\n",
            "Index", "Name", "Kind", "Type", "Scope", "Attribute");
+    struct symbols *temp = &table[0];
+    temp = temp->next;
+    int i = 0;
+    while(temp != NULL){
+        printf("%-10d%-10s%-12s%-10s%-10d", i, temp->name, temp->kind, temp->type, temp->scope);
+        if(strcmp(temp->attribute, "NULL"))    printf("%-10s\n", temp->attribute);
+        else printf("\n");
+        temp = temp->next;
+        i++;
+    }
 }
