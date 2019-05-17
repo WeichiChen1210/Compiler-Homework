@@ -6,8 +6,11 @@
 extern YYSTYPE yylval; //YYSTYPE
 char buf[BUF_SIZE];
 int line_num = 0;
+int scope = 0;
+char temp[20];
+
 /* This macro is used to record code line */
-#define CONCAT { strncat(buf, yytext, BUF_SIZE - strlen(buf) - 1); }
+#define CONCAT { strncat(buf, yytext, BUF_SIZE - strlen(buf) - 1); strcpy(temp, yytext); }
 %}
 
 /* Define regular expression label */
@@ -55,14 +58,13 @@ id			{letter}+({letter}|{digit})*
 "!"		{ CONCAT; return NOT; }
 
  /* Delimiters */
-"("		{ CONCAT; return LB; }
-")"		{ CONCAT; return RB; }
-"{"		{ CONCAT; return LCB; }
-"}"		{ CONCAT; return RCB; }
+"("		{ CONCAT; scope++; return LB; }
+")"		{ CONCAT; scope--; return RB; }
+"{"		{ CONCAT; scope++; return LCB; }
+"}"		{ CONCAT; scope--; return RCB; }
 "["		{ CONCAT; return LSB; }
 "]"		{ CONCAT; return RSB; }
 ","		{ CONCAT; return COMMA; }
-
  /* Print Keywords */	
 "print"		{ CONCAT; return PRINT; }
 
@@ -112,7 +114,17 @@ id			{letter}+({letter}|{digit})*
  /* others */
 
 [;]         { CONCAT; return SEMICOLON; }
-[\n]        { CONCAT; line_num++; printf("%d: %s", line_num, buf); memset(buf, 0, BUF_SIZE); }
+[\n]        { if(!strcmp(temp, "}")) {
+                printf("%d: %s%s", ++line_num, buf, "\n"); 
+                dump_symbol(scope+1);
+                strcpy(temp, "\0");
+              }
+              else{
+                  CONCAT; line_num++;
+                  if(!strcmp(buf, "\n")) printf("%d:\n", line_num);
+                  else printf("%d: %s", line_num, buf); 
+              }
+              memset(buf, 0, BUF_SIZE); }
 [ \t]		{ CONCAT; } /* Ignore */
 [^ \t\n] 	{ CONCAT; } /* Ignore other charactor sets */
 <<EOF>>     { yyterminate(); }

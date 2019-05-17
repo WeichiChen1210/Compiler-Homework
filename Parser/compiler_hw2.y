@@ -19,6 +19,7 @@ struct symbols{
     int scope;
     char attribute[50];
     int printed;
+    int symbol_num;
 
     struct symbols *next;
 };
@@ -30,6 +31,7 @@ int lookup_symbol();
 void create_symbol();
 void insert_symbol();
 void dump_symbol();
+void semantic_errors();
 
 %}
 
@@ -86,8 +88,12 @@ function_definition
                                                             temp = strtok($2, ":");
                                                             $2 = temp;
                                                             temp = strtok(NULL, ":");
-                                                            insert_symbol($2, "function", $1, scope_num, temp); 
-                                                            dump_symbol(scope_num+1);
+                                                            printf("lookup %s %d\n", $2, lookup_symbol($2, scope_num));
+                                                            if(lookup_symbol($2, scope_num)){
+                                                                // redeclared function
+                                                                semantic_errors(1);
+                                                            }
+                                                            else insert_symbol($2, "function", $1, scope_num, temp); 
                                                             }
     | declarator declaration_list compound_statement
     | declarator compound_statement
@@ -130,7 +136,13 @@ out_scope
 
 declaration
     : declaration_specifiers SEMICOLON
-    | declaration_specifiers init_declarator_list SEMICOLON     { insert_symbol($2, "variable", $1, scope_num, "NULL");}
+    | declaration_specifiers init_declarator_list SEMICOLON     {   printf("lookup %s %d\n", $2, lookup_symbol($2, scope_num)); 
+                                                                    if(lookup_symbol($2, scope_num)){
+                                                                        // redeclared variable
+                                                                        semantic_errors(0);
+                                                                    }
+                                                                    else insert_symbol($2, "variable", $1, scope_num, "NULL");
+                                                                }
     ;
 
 statement_list
@@ -210,7 +222,13 @@ expression
     ;
 
 parameter_declaration
-    : declaration_specifiers declarator { insert_symbol($2, "parameter", $1, scope_num, "NULL"); $$ = $1; }
+    : declaration_specifiers declarator {   printf("lookup %s %d\n", $2, lookup_symbol($2, scope_num)); 
+                                            if(lookup_symbol($2, scope_num)){
+
+                                            }
+                                            else insert_symbol($2, "parameter", $1, scope_num, "NULL"); 
+                                            $$ = $1; 
+                                        }
     | declaration_specifiers
     ;
 
@@ -337,6 +355,7 @@ int main(int argc, char** argv)
     yylineno = 0;
     create_symbol();
     yyparse();
+    dump_symbol(0);
     if(!err_flag) printf("\nTotal lines: %d \n",yylineno);
 
     return 0;
@@ -358,8 +377,8 @@ void create_symbol() {
         table[i].next = NULL;
         table[i].scope = 0;
         table[i].printed = -1;
+        table[i].symbol_num = 0;
     }
-    printf("table create completed\n");
 }
 
 void insert_symbol(char *name, char *kind, char *type, int scope, char *attribute) {
@@ -380,23 +399,42 @@ void insert_symbol(char *name, char *kind, char *type, int scope, char *attribut
     new_symbol->printed = -1;
     new_symbol->next = NULL;
     temp->next = new_symbol;
+    table[scope].symbol_num++;
 }
 
-int lookup_symbol() {
-    
+int lookup_symbol(char *id, int scope) {
+    if(table[scope].symbol_num == 0) return 0;
+    struct symbols *temp = &table[scope];
+    temp = temp->next;
+
+    int existed = 0;
+    while(temp->next != NULL){
+        if(!strcmp(temp->name, id)){
+            existed = 1;
+            break;
+        }
+        temp = temp->next;
+    }
+
+    return existed;
 }
+
 void dump_symbol(int scope) {
-    printf("\n%-10s%-10s%-12s%-10s%-10s%-10s\n",
+    if(table[scope].symbol_num == 0){
+        
+        return;
+    }
+    printf("\n%-10s%-10s%-12s%-10s%-10s%-10s\n\n",
            "Index", "Name", "Kind", "Type", "Scope", "Attribute");
     struct symbols *temp = &table[scope];
     int count = table[scope].printed;
 
     temp = temp->next;
-    int i = 0;
+    int i = 0, index = 0;
     while(temp != NULL){
         if(i >= count){
-            printf("%-10d%-10s%-12s%-10s%-10d", i, temp->name, temp->kind, temp->type, temp->scope);
-            if(strcmp(temp->attribute, "\0"))    printf("%-10s\n", temp->attribute);
+            printf("%-10d%-10s%-12s%-10s%-10d", index++, temp->name, temp->kind, temp->type, temp->scope);
+            if(strcmp(temp->attribute, "\0"))    printf("%s\n", temp->attribute);
             else printf("\n");
         }
         
@@ -406,14 +444,23 @@ void dump_symbol(int scope) {
     printf("\n");
     
     table[scope].printed = i;
-    printf("print from %d\n", table[scope].printed);
+    // printf("print from %d\n", table[scope].printed);
 }
 
-void add_attribute(int scope){
-    struct symbols *temp = &table[scope-1];
-    int i = 0;
-    while(temp->next != NULL){
-        temp = temp->next;
+void semantic_errors(int kind_of_error){
+    switch(kind_of_error){
+        case 0:                 // redeclared variable
+
+            break;
+        case 1:                 // redeclared function
+
+            break;
+        case 2:                 // undeclared variable
+
+            break;
+        case 3:                 // undeclared function
+
+            break;
+        default:;
     }
-    printf("%s\n", temp->name);
 }
