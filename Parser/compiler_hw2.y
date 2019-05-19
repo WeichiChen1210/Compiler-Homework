@@ -66,6 +66,7 @@ void semantic_errors();
 // %type <f_val> stat compound_statement expression_statement initializer print_func
 %type <string> type_specifier declaration_specifiers declarator declaration init_declarator_list init_declarator
 %type <string> function_definition parameter_list parameter_declaration
+%type <string> postfix_expression primary_expression
 
 /* Yacc will start at this nonterminal */
 %start translation_unit
@@ -88,7 +89,6 @@ function_definition
                                                             temp = strtok($2, ":");
                                                             $2 = temp;
                                                             temp = strtok(NULL, ":");
-                                                            printf("lookup %s %d\n", $2, lookup_symbol($2, scope_num));
                                                             if(lookup_symbol($2, scope_num)){
                                                                 // redeclared function
                                                                 semantic_errors(1);
@@ -136,7 +136,7 @@ out_scope
 
 declaration
     : declaration_specifiers SEMICOLON
-    | declaration_specifiers init_declarator_list SEMICOLON     {   printf("lookup %s %d\n", $2, lookup_symbol($2, scope_num)); 
+    | declaration_specifiers init_declarator_list SEMICOLON     {    
                                                                     if(lookup_symbol($2, scope_num)){
                                                                         // redeclared variable
                                                                         semantic_errors(0);
@@ -222,7 +222,7 @@ expression
     ;
 
 parameter_declaration
-    : declaration_specifiers declarator {   printf("lookup %s %d\n", $2, lookup_symbol($2, scope_num)); 
+    : declaration_specifiers declarator {   printf("para %s %d\n", $2, scope_num);
                                             if(lookup_symbol($2, scope_num)){
 
                                             }
@@ -245,7 +245,7 @@ logical_and_expression
 
 assignment_expression
     : conditional_expression
-    | unary_expression assignment_operator assignment_expression
+    | unary_expression assignment_operator assignment_expression    
     ;
 
 initializer_list
@@ -278,7 +278,12 @@ exclusive_or_expression
     ;
 
 postfix_expression
-    : primary_expression
+    : primary_expression        {   if($1 != NULL) {
+                                        printf("post %s %d\n", $1, scope_num);
+                                        printf("%d\n", lookup_symbol($1, scope_num));
+                                    } 
+                                    $$ = $1; 
+                                }
     | postfix_expression LSB expression RSB
     | postfix_expression LB RB
     | postfix_expression LB argument_expression_list RB
@@ -297,13 +302,13 @@ and_expression
     ;
 
 primary_expression
-    : ID
-    | I_CONST
-    | F_CONST
-    | QUOTA STR_CONST QUOTA
-    | TRUE
-    | FALSE
-    | LB expression RB
+    : ID                        { $$ = strdup(yytext); }
+    | I_CONST                   { ; }
+    | F_CONST                   { ; }
+    | QUOTA STR_CONST QUOTA     { ; }
+    | TRUE                      { ; }
+    | FALSE                     { ; }
+    | LB expression RB          { ; }
     ;
 
 argument_expression_list
@@ -374,6 +379,7 @@ void yyerror(char *s)
 void create_symbol() {
     int i;
     for(i = 0; i < 200; i++){
+        strcpy(table[i].name, "HEAD");
         table[i].next = NULL;
         table[i].scope = 0;
         table[i].printed = -1;
@@ -388,7 +394,7 @@ void insert_symbol(char *name, char *kind, char *type, int scope, char *attribut
     while(temp->next != NULL){
         temp = temp->next;
     }
-
+    
     new_symbol = (struct symbols *)malloc(sizeof(struct symbols));
     strcpy(new_symbol->name, name);
     strcpy(new_symbol->kind, kind);
@@ -400,15 +406,16 @@ void insert_symbol(char *name, char *kind, char *type, int scope, char *attribut
     new_symbol->next = NULL;
     temp->next = new_symbol;
     table[scope].symbol_num++;
+
 }
 
 int lookup_symbol(char *id, int scope) {
     if(table[scope].symbol_num == 0) return 0;
     struct symbols *temp = &table[scope];
-    temp = temp->next;
 
     int existed = 0;
-    while(temp->next != NULL){
+    while(temp != NULL){
+        // printf("in lookup %s\n", temp->name);
         if(!strcmp(temp->name, id)){
             existed = 1;
             break;
