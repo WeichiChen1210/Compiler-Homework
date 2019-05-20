@@ -9,7 +9,9 @@ extern int yylex();
 extern char* yytext;   // Get current token from lex
 extern char buf[256];  // Get current code line from lex
 
-int err_flag = 0;
+int sem_err_flag = -1;
+int syn_err_flag = 0;
+char error_id[50];
 int scope_num = 0;
 
 struct symbols{
@@ -27,11 +29,11 @@ struct symbols{
 struct symbols table[200];
 
 /* Symbol table function - you can add new function if needed. */
-int lookup_symbol();
+int lookup_symbol(char *id, int scope);
 void create_symbol();
-void insert_symbol();
-void dump_symbol();
-void semantic_errors();
+void insert_symbol(char *name, char *kind, char *type, int scope, char *attribute);
+void dump_symbol(int scope);
+void semantic_errors(int kind_of_error, int offset);
 
 %}
 
@@ -91,7 +93,9 @@ function_definition
                                                             temp = strtok(NULL, ":");
                                                             if(lookup_symbol($2, scope_num)){
                                                                 // redeclared function
-                                                                semantic_errors(1);
+                                                                // semantic_errors(1);
+                                                                sem_err_flag = 1;
+                                                                strcpy(error_id, $2);
                                                             }
                                                             else insert_symbol($2, "function", $1, scope_num, temp); 
                                                             }
@@ -111,10 +115,18 @@ declaration_list
 
 compound_statement
     : LCB RCB
-    | LCB in_scope statement_list RCB out_scope
-    | LCB in_scope declaration_list RCB out_scope
-    | LCB in_scope declaration_list statement_list RCB out_scope
+    | LCB in_scope block_item_list RCB out_scope
     ;
+
+block_item_list
+	: block_item
+	| block_item_list block_item
+    ;
+
+block_item
+	: declaration_list
+	| statement
+	;
 
 declarator
     : ID                { $$ = strdup(yytext); }
@@ -139,7 +151,9 @@ declaration
     | declaration_specifiers init_declarator_list SEMICOLON     {    
                                                                     if(lookup_symbol($2, scope_num)){
                                                                         // redeclared variable
-                                                                        semantic_errors(0);
+                                                                        //semantic_errors(0);
+                                                                        sem_err_flag = 0;
+                                                                        strcpy(error_id, $2);
                                                                     }
                                                                     else insert_symbol($2, "variable", $1, scope_num, "NULL");
                                                                 }
@@ -207,8 +221,16 @@ jump_statement
     ;
 
 print_statement
-    : PRINT LB ID RB SEMICOLON
+    : PRINT LB id_stat RB SEMICOLON
     | PRINT LB QUOTA STR_CONST QUOTA RB SEMICOLON
+    ;
+
+id_stat
+    : ID    {   if(!lookup_symbol(yytext, scope_num)){
+                    sem_err_flag = 2;
+                    strcpy(error_id, yytext);
+                }
+            }
     ;
 
 logical_or_expression
@@ -222,11 +244,9 @@ expression
     ;
 
 parameter_declaration
-    : declaration_specifiers declarator {   printf("para %s %d\n", $2, scope_num);
-                                            if(lookup_symbol($2, scope_num)){
-
-                                            }
-                                            else insert_symbol($2, "parameter", $1, scope_num, "NULL"); 
+    : declaration_specifiers declarator {   /*printf("para %s %d\n", $2, scope_num);*/
+                                            if(!lookup_symbol($2, scope_num))
+                                                insert_symbol($2, "parameter", $1, scope_num, "NULL"); 
                                             $$ = $1; 
                                         }
     | declaration_specifiers
@@ -245,7 +265,7 @@ logical_and_expression
 
 assignment_expression
     : conditional_expression
-    | unary_expression assignment_operator assignment_expression    
+    | unary_expression assignment_operator assignment_expression
     ;
 
 initializer_list
@@ -279,14 +299,27 @@ exclusive_or_expression
 
 postfix_expression
     : primary_expression        {   if($1 != NULL) {
-                                        printf("post %s %d\n", $1, scope_num);
-                                        printf("%d\n", lookup_symbol($1, scope_num));
-                                    } 
-                                    $$ = $1; 
+                                        //printf("post %s %d\n", $1, scope_num);
+                                        if(!lookup_symbol($1, scope_num)){
+                                            // undeclared variable
+                                            //printf("variable %s not declared\n", $1);
+                                            sem_err_flag = 2;
+                                            strcpy(error_id, $1);
+                                        }
+                                    }                               
                                 }
     | postfix_expression LSB expression RSB
     | postfix_expression LB RB
-    | postfix_expression LB argument_expression_list RB
+    | postfix_expression LB argument_expression_list RB {   if($1 != NULL) {
+                                                                //printf("post func %s %d\n", $1, scope_num);
+                                                                if(!lookup_symbol($1, scope_num)){
+                                                                    // undeclared function
+                                                                    //printf("function %s not declared\n", $1);
+                                                                    sem_err_flag = 3;
+                                                                    strcpy(error_id, $1);
+                                                                }
+                                                            }  
+                                                        }
     | postfix_expression INC
     | postfix_expression DEC
     ;
@@ -360,18 +393,23 @@ int main(int argc, char** argv)
     yylineno = 0;
     create_symbol();
     yyparse();
-    dump_symbol(0);
-    if(!err_flag) printf("\nTotal lines: %d \n",yylineno);
-
+    if(!syn_err_flag){
+        dump_symbol(0);
+        printf("\nTotal lines: %d \n",yylineno);
+    }
     return 0;
 }
 
 void yyerror(char *s)
 {
-    err_flag = 1;
-    printf("%d: %s\n", yylineno+1, buf);
+    //printf("flag %d\n", sem_err_flag);
+    if(sem_err_flag == -1)
+        printf("%d: %s\n", yylineno+1, buf);
+    else semantic_errors(sem_err_flag, 1);
+    
+    syn_err_flag = 1;
     printf("\n|-----------------------------------------------|\n");
-    printf("| Error found in line %d: %s\n", ++yylineno, buf);
+    printf("| Error found in line %d: %s\n", yylineno+1, buf);
     printf("| %s", s);
     printf("\n|-----------------------------------------------|\n\n");
 }
@@ -410,18 +448,28 @@ void insert_symbol(char *name, char *kind, char *type, int scope, char *attribut
 }
 
 int lookup_symbol(char *id, int scope) {
-    if(table[scope].symbol_num == 0) return 0;
-    struct symbols *temp = &table[scope];
-
+    
+    struct symbols *temp;
+    
     int existed = 0;
-    while(temp != NULL){
-        // printf("in lookup %s\n", temp->name);
-        if(!strcmp(temp->name, id)){
-            existed = 1;
-            break;
+
+    while(scope >= 0){
+        temp = &table[scope];
+        if(table[scope].symbol_num == 0){
+            scope--;
+            continue;
         }
-        temp = temp->next;
+        while(temp != NULL){
+            // printf("in lookup %s\n", temp->name);
+            if(!strcmp(temp->name, id)){
+                existed = 1;
+                break;
+            }
+            temp = temp->next;
+        }
+        scope--;
     }
+    
 
     return existed;
 }
@@ -454,20 +502,38 @@ void dump_symbol(int scope) {
     // printf("print from %d\n", table[scope].printed);
 }
 
-void semantic_errors(int kind_of_error){
+void semantic_errors(int kind_of_error, int offset){
+    int line = yylineno + offset;
     switch(kind_of_error){
         case 0:                 // redeclared variable
-
+            printf("%d: %s\n", line, buf);
+            printf("\n|-----------------------------------------------|\n");
+            printf("| Error found in line %d: %s\n", line, buf);
+            printf("| Redeclared variable %s", error_id);
+            printf("\n|-----------------------------------------------|\n\n");
             break;
         case 1:                 // redeclared function
-
+            printf("%d: %s\n", line, buf);
+            printf("\n|-----------------------------------------------|\n");
+            printf("| Error found in line %d: %s\n", line, buf);
+            printf("| Redeclared function %s", error_id);
+            printf("\n|-----------------------------------------------|\n\n");
             break;
         case 2:                 // undeclared variable
-
+            printf("%d: %s\n", line, buf);
+            printf("\n|-----------------------------------------------|\n");
+            printf("| Error found in line %d: %s\n", line, buf);
+            printf("| Undeclared variable %s", error_id);
+            printf("\n|-----------------------------------------------|\n\n");
             break;
         case 3:                 // undeclared function
-
+            printf("%d: %s\n", line, buf);
+            printf("\n|-----------------------------------------------|\n");
+            printf("| Error found in line %d: %s\n", line, buf);
+            printf("| Undeclared function %s", error_id);
+            printf("\n|-----------------------------------------------|\n\n");
             break;
         default:;
+        sem_err_flag = -1;
     }
 }

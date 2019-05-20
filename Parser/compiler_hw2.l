@@ -4,6 +4,8 @@
 #define BUF_SIZE 256
 
 extern YYSTYPE yylval; //YYSTYPE
+extern int sem_err_flag;
+extern int yylineno;
 char buf[BUF_SIZE];
 int line_num = 0;
 int scope = 0;
@@ -114,17 +116,22 @@ id			{letter}+({letter}|{digit})*
  /* others */
 
 [;]         { CONCAT; return SEMICOLON; }
-[\n]        { if(!strcmp(temp, "}")) {
-                printf("%d: %s%s", ++line_num, buf, "\n"); 
-                dump_symbol(scope+1);
-                strcpy(temp, "\0");
-              }
-              else{
-                  CONCAT; line_num++;
-                  if(!strcmp(buf, "\n")) printf("%d:\n", line_num);
-                  else printf("%d: %s", line_num, buf); 
-              }
-              memset(buf, 0, BUF_SIZE); }
+[\n]        {   if(sem_err_flag != -1){
+                    semantic_errors(sem_err_flag, 0);
+                    sem_err_flag = -1;
+                }
+                else if(!strcmp(temp, "}")) {
+                    printf("%d: %s%s", yylineno, buf, "\n"); 
+                    dump_symbol(scope+1);
+                    strcpy(temp, "\0");
+                }
+                else{
+                    CONCAT; line_num++;
+                    if(!strcmp(buf, "\n")) printf("%d:\n", yylineno);
+                    else printf("%d: %s", yylineno, buf); 
+                }
+                memset(buf, 0, BUF_SIZE);
+            }
 [ \t]		{ CONCAT; } /* Ignore */
 [^ \t\n] 	{ CONCAT; } /* Ignore other charactor sets */
 <<EOF>>     { yyterminate(); }
