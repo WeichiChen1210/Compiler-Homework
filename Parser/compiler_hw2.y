@@ -34,7 +34,9 @@ int lookup_symbol(char *id, int scope);
 void create_symbol();
 void insert_symbol(char *name, char *kind, char *type, int scope, char *attribute);
 void dump_symbol(int scope);
+void delete_parameter_symbol(int scope);
 void semantic_errors(int kind_of_error, int offset);
+void fill_parameter(int scope, char *id, char *attribute);
 
 %}
 
@@ -92,7 +94,11 @@ function_definition
                                                                 temp = strtok($2, ":");
                                                                 $2 = temp;
                                                                 temp = strtok(NULL, ":");
-                                                                if(lookup_symbol($2, scope_num)){
+                                                                int result = lookup_symbol($2, scope_num);
+                                                                if(result == 2){
+                                                                    fill_parameter(scope_num, $2, temp);
+                                                                }
+                                                                else if(result){
                                                                     // redeclared function
                                                                     // semantic_errors(1);
                                                                     sem_err_flag = 1;
@@ -115,6 +121,7 @@ function_definition
                                                             strcpy(error_id, $2);
                                                         }
                                                         else insert_symbol($2, "function", $1, scope_num, notdef);
+                                                        delete_parameter_symbol(scope_num+1);
                                                     }
     ;
 
@@ -449,11 +456,14 @@ void insert_symbol(char *name, char *kind, char *type, int scope, char *attribut
     strcpy(new_symbol->kind, kind);
     strcpy(new_symbol->type, type);
     if(attribute == NULL || !strcmp(attribute, "NULL")){
+        // variable
         strcpy(new_symbol->attribute, "\0");
         new_symbol->defined = 1;
     }
+    // function forwarding, undefined
     else if(!strcmp(attribute, "notdefined"))   new_symbol->defined = 0;
     else {
+        // function defined and parameter
         strcpy(new_symbol->attribute, attribute);
         new_symbol->defined = 1;
     }
@@ -480,7 +490,8 @@ int lookup_symbol(char *id, int scope) {
         while(temp != NULL){
             // printf("in lookup %s\n", temp->name);
             if(!strcmp(temp->name, id)){
-                existed = 1;
+                if(!temp->defined) existed = 2;  
+                else existed = 1;
                 break;
             }
             temp = temp->next;
@@ -494,30 +505,28 @@ int lookup_symbol(char *id, int scope) {
 
 void dump_symbol(int scope) {
     //printf("scope %d %d %d\n", scope, table[scope].printed, table[scope].symbol_num);
-    if(table[scope].symbol_num == 0 || table[scope].printed >= table[scope].symbol_num){
-        
-        return;
-    }
+    if(table[scope].symbol_num == 0)    return;
+    
     printf("\n%-10s%-10s%-12s%-10s%-10s%-10s\n\n",
            "Index", "Name", "Kind", "Type", "Scope", "Attribute");
-    struct symbols *temp = &table[scope];
-    int count = table[scope].printed;
-
-    temp = temp->next;
+    
+    //int count = table[scope].printed;
     int i = 0, index = 0;
-    while(temp != NULL){
-        if(i >= count){
-            printf("%-10d%-10s%-12s%-10s%-10d", index++, temp->name, temp->kind, temp->type, temp->scope);
-            if(strcmp(temp->attribute, "\0"))    printf("%s\n", temp->attribute);
-            else printf("\n");
-        }
-        
+    while(table[scope].next != NULL){
+        struct symbols *temp = &table[scope];
         temp = temp->next;
+
+        printf("%-10d%-10s%-12s%-10s%-10d", index++, temp->name, temp->kind, temp->type, temp->scope);
+        if(strcmp(temp->attribute, "\0"))    printf("%s\n", temp->attribute);
+        else printf("\n");
+        
+        table[scope].next = temp->next;
+        free(temp);
         i++;
     }
     printf("\n");
-    
-    table[scope].printed = i;
+    table[scope].symbol_num = 0;
+    //table[scope].printed = i;
     // printf("print from %d\n", table[scope].printed);
 }
 
@@ -554,5 +563,30 @@ void semantic_errors(int kind_of_error, int offset){
             break;
         default:;
         sem_err_flag = -1;
+    }
+}
+
+void delete_parameter_symbol(int scope) {
+    
+    while(table[scope].next != NULL){
+        struct symbols *temp = &table[scope];
+        temp = temp->next;
+
+        table[scope].next = temp->next;
+        free(temp);
+    }
+    table[scope].symbol_num = 0;
+}
+
+void fill_parameter(int scope, char *id, char *attribute) {
+    struct symbols *temp = &table[scope];
+    temp = temp->next;
+    
+    while(temp != NULL){
+        if(!strcmp(temp->name, id)){
+            strcpy(temp->attribute, attribute);
+            break;
+        }
+        temp = temp->next;        
     }
 }
