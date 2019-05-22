@@ -10,6 +10,7 @@ char buf[BUF_SIZE];
 int line_num = 0;
 int scope = 0;
 char temp[20];
+int rsb = 0;
 
 /* This macro is used to record code line */
 #define CONCAT { strncat(buf, yytext, BUF_SIZE - strlen(buf) - 1); strcpy(temp, yytext); }
@@ -63,7 +64,15 @@ id			{letter}+({letter}|{digit})*
 "("		{ CONCAT; scope++; return LB; }
 ")"		{ CONCAT; scope--; return RB; }
 "{"		{ CONCAT; scope++; return LCB; }
-"}"		{ CONCAT; scope--; return RCB; }
+"}"		{   CONCAT; scope--; 
+            // printf("%d: %s%s", yylineno+1, buf, "\n");
+            // dump_symbol(scope+1);
+            // memset(buf, 0, BUF_SIZE);
+            // strcpy(buf, " ");
+            // dumped = 1;
+            rsb = 1;
+            return RCB; 
+        }
 "["		{ CONCAT; return LSB; }
 "]"		{ CONCAT; return RSB; }
 ","		{ CONCAT; return COMMA; }
@@ -120,10 +129,17 @@ id			{letter}+({letter}|{digit})*
                     semantic_errors(sem_err_flag, 0);
                     sem_err_flag = -1;
                 }
+                else if(strcmp(temp, "}") && rsb){
+                    printf("%d: %s%s", yylineno, buf, "\n");
+                    dump_symbol(scope);
+                    strcpy(temp, "\0");
+                    rsb = 0;
+                }
                 else if(!strcmp(temp, "}")) {
-                    printf("%d: %s%s", yylineno, buf, "\n"); 
+                    printf("%d: %s%s", yylineno, buf, "\n");
                     dump_symbol(scope+1);
                     strcpy(temp, "\0");
+                    rsb = 0;
                 }
                 else{
                     CONCAT; line_num++;

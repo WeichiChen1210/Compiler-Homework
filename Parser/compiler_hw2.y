@@ -22,6 +22,7 @@ struct symbols{
     char attribute[50];
     int printed;
     int symbol_num;
+    int defined;
 
     struct symbols *next;
 };
@@ -87,20 +88,34 @@ external_declaration
 
 function_definition
     : declaration_specifiers declarator declaration_list compound_statement
-    | declaration_specifiers declarator compound_statement  { char *temp; 
-                                                            temp = strtok($2, ":");
-                                                            $2 = temp;
-                                                            temp = strtok(NULL, ":");
-                                                            if(lookup_symbol($2, scope_num)){
-                                                                // redeclared function
-                                                                // semantic_errors(1);
-                                                                sem_err_flag = 1;
-                                                                strcpy(error_id, $2);
-                                                            }
-                                                            else insert_symbol($2, "function", $1, scope_num, temp); 
+    | declaration_specifiers declarator compound_statement  {   char *temp; 
+                                                                temp = strtok($2, ":");
+                                                                $2 = temp;
+                                                                temp = strtok(NULL, ":");
+                                                                if(lookup_symbol($2, scope_num)){
+                                                                    // redeclared function
+                                                                    // semantic_errors(1);
+                                                                    sem_err_flag = 1;
+                                                                    strcpy(error_id, $2);
+                                                                }
+                                                                else insert_symbol($2, "function", $1, scope_num, temp); 
                                                             }
     | declarator declaration_list compound_statement
     | declarator compound_statement
+    | declaration_specifiers declarator SEMICOLON   {   char *temp;
+                                                        temp = strtok($2, ":");
+                                                        $2 = temp;
+                                                        //temp = strtok(NULL, ":");
+                                                        char notdef[15];
+                                                        strcpy(notdef, "notdefined");
+                                                        if(lookup_symbol($2, scope_num)){
+                                                            // redeclared function
+                                                            // semantic_errors(1);
+                                                            sem_err_flag = 1;
+                                                            strcpy(error_id, $2);
+                                                        }
+                                                        else insert_symbol($2, "function", $1, scope_num, notdef);
+                                                    }
     ;
 
 declaration_specifiers
@@ -130,12 +145,12 @@ block_item
 
 declarator
     : ID                { $$ = strdup(yytext); }
-    | LB declarator RB  { ; }
+    | LB declarator RB  
     | declarator LSB conditional_expression RSB
     | declarator LSB RSB
     | declarator LB in_scope parameter_list RB out_scope { strcat($$, ":"); strcat($$, $4); }
     | declarator LB in_scope identifier_list RB out_scope
-    | declarator LB RB
+    | declarator LB RB  
     ;
 
 in_scope
@@ -147,7 +162,7 @@ out_scope
     ;
 
 declaration
-    : declaration_specifiers SEMICOLON
+    : declaration_specifiers SEMICOLON  
     | declaration_specifiers init_declarator_list SEMICOLON     {    
                                                                     if(lookup_symbol($2, scope_num)){
                                                                         // redeclared variable
@@ -159,11 +174,6 @@ declaration
                                                                 }
     ;
 
-statement_list
-    : statement
-    | statement_list statement
-    ;
-
 identifier_list
     : ID
     | identifier_list COMMA ID
@@ -171,7 +181,7 @@ identifier_list
 
 init_declarator_list
     : init_declarator                               { $$ = $1; }
-    | init_declarator_list COMMA init_declarator    { ; }
+    | init_declarator_list COMMA init_declarator
     ;
 
 statement
@@ -422,6 +432,7 @@ void create_symbol() {
         table[i].scope = 0;
         table[i].printed = -1;
         table[i].symbol_num = 0;
+        table[i].defined = -1;
     }
 }
 
@@ -437,8 +448,15 @@ void insert_symbol(char *name, char *kind, char *type, int scope, char *attribut
     strcpy(new_symbol->name, name);
     strcpy(new_symbol->kind, kind);
     strcpy(new_symbol->type, type);
-    if(attribute == NULL || !strcmp(attribute, "NULL")) strcpy(new_symbol->attribute, "\0");
-    else strcpy(new_symbol->attribute, attribute);
+    if(attribute == NULL || !strcmp(attribute, "NULL")){
+        strcpy(new_symbol->attribute, "\0");
+        new_symbol->defined = 1;
+    }
+    else if(!strcmp(attribute, "notdefined"))   new_symbol->defined = 0;
+    else {
+        strcpy(new_symbol->attribute, attribute);
+        new_symbol->defined = 1;
+    }
     new_symbol->scope = scope;
     new_symbol->printed = -1;
     new_symbol->next = NULL;
@@ -475,7 +493,8 @@ int lookup_symbol(char *id, int scope) {
 }
 
 void dump_symbol(int scope) {
-    if(table[scope].symbol_num == 0){
+    //printf("scope %d %d %d\n", scope, table[scope].printed, table[scope].symbol_num);
+    if(table[scope].symbol_num == 0 || table[scope].printed >= table[scope].symbol_num){
         
         return;
     }
