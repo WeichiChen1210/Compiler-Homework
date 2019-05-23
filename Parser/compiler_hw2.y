@@ -30,13 +30,13 @@ struct symbols{
 struct symbols table[200];
 
 /* Symbol table function - you can add new function if needed. */
-int lookup_symbol(char *id, int scope);
+int lookup_symbol(char *id, int scope, int mode);
 void create_symbol();
 void insert_symbol(char *name, char *kind, char *type, int scope, char *attribute);
 void dump_symbol(int scope);
-void delete_parameter_symbol(int scope);
-void semantic_errors(int kind_of_error, int offset);
-void fill_parameter(int scope, char *id, char *attribute);
+void semantic_errors(int kind_of_error, int offset);    // print semantic errors messages
+void delete_parameter_symbol(int scope);                // delete the parameter of forwarding function
+void fill_parameter(int scope, char *id, char *attribute);  // refill the parameters to forwarding functions
 
 %}
 
@@ -90,37 +90,49 @@ external_declaration
 
 function_definition
     : declaration_specifiers declarator declaration_list compound_statement
-    | declaration_specifiers declarator compound_statement  {   char *temp; 
+    /* normal function declaration and definition */
+    | declaration_specifiers declarator compound_statement  {   /* split the string that contains ID and parameter list */
+                                                                char *temp; 
                                                                 temp = strtok($2, ":");
+                                                                /* ID */
                                                                 $2 = temp;
+                                                                /* parameters */
                                                                 temp = strtok(NULL, ":");
-                                                                int result = lookup_symbol($2, scope_num);
+                                                                /* lookup */
+                                                                int result = lookup_symbol($2, scope_num, 1);
+                                                                /* if return 2, it is a forwarding function(encountered at the 2nd time) */
                                                                 if(result == 2){
+                                                                    /* refill the attribute with the ID and parameter list */
                                                                     fill_parameter(scope_num, $2, temp);
                                                                 }
+                                                                /* if return 1, redeclared function*/
                                                                 else if(result){
                                                                     // redeclared function
-                                                                    // semantic_errors(1);
+                                                                    /* set semantic error flag and lex will call the semantic function */
                                                                     sem_err_flag = 1;
+                                                                    /* save the ID to use in semantic function */
                                                                     strcpy(error_id, $2);
                                                                 }
+                                                                /* return 0, insert the symbol */
                                                                 else insert_symbol($2, "function", $1, scope_num, temp); 
                                                             }
     | declarator declaration_list compound_statement
     | declarator compound_statement
-    | declaration_specifiers declarator SEMICOLON   {   char *temp;
+    | declaration_specifiers declarator SEMICOLON   {   /* forwarding function(encountered at the first time) */
+                                                        char *temp;
                                                         temp = strtok($2, ":");
                                                         $2 = temp;
-                                                        //temp = strtok(NULL, ":");
                                                         char notdef[15];
                                                         strcpy(notdef, "notdefined");
-                                                        if(lookup_symbol($2, scope_num)){
+                                                        /* check if redeclared */
+                                                        if(lookup_symbol($2, scope_num, 1)){
                                                             // redeclared function
-                                                            // semantic_errors(1);
                                                             sem_err_flag = 1;
                                                             strcpy(error_id, $2);
                                                         }
+                                                        /* false, insert */
                                                         else insert_symbol($2, "function", $1, scope_num, notdef);
+                                                        /* delete the symbols of the forwarding function */
                                                         delete_parameter_symbol(scope_num+1);
                                                     }
     ;
@@ -133,11 +145,6 @@ declaration_specifiers
 declaration_list
     : declaration
     | declaration_list declaration
-    ;
-
-compound_statement
-    : LCB RCB
-    | LCB in_scope block_item_list RCB out_scope
     ;
 
 block_item_list
@@ -155,11 +162,12 @@ declarator
     | LB declarator RB  
     | declarator LSB conditional_expression RSB
     | declarator LSB RSB
+    /* attach parameters together */
     | declarator LB in_scope parameter_list RB out_scope { strcat($$, ":"); strcat($$, $4); }
     | declarator LB in_scope identifier_list RB out_scope
     | declarator LB RB  
     ;
-
+/* these 2 states are used to increase and decrease scope level */
 in_scope
     : { scope_num++; }
     ;
@@ -170,10 +178,10 @@ out_scope
 
 declaration
     : declaration_specifiers SEMICOLON  
-    | declaration_specifiers init_declarator_list SEMICOLON     {    
-                                                                    if(lookup_symbol($2, scope_num)){
+    | declaration_specifiers init_declarator_list SEMICOLON     {   /* variable declaration */
+                                                                    int result = lookup_symbol($2, scope_num, 0);
+                                                                    if(result){
                                                                         // redeclared variable
-                                                                        //semantic_errors(0);
                                                                         sem_err_flag = 0;
                                                                         strcpy(error_id, $2);
                                                                     }
@@ -191,6 +199,7 @@ init_declarator_list
     | init_declarator_list COMMA init_declarator
     ;
 
+/* statements */
 statement
     : compound_statement
     | expression_statement
@@ -200,18 +209,9 @@ statement
     | print_statement
     ;
 
-conditional_expression
-    : logical_or_expression
-    ;
-
-parameter_list
-    : parameter_declaration { $$ = $1; }
-    | parameter_list COMMA parameter_declaration    { $$ = strcat($1, ", "); $$ = strcat($$, $3); }
-    ;
-
-init_declarator
-    : declarator                    { $$ = $1; }
-    | declarator ASGN initializer   { $$ = $1; }
+compound_statement
+    : LCB RCB
+    | LCB in_scope block_item_list RCB out_scope
     ;
 
 expression_statement
@@ -242,8 +242,23 @@ print_statement
     | PRINT LB QUOTA STR_CONST QUOTA RB SEMICOLON
     ;
 
+conditional_expression
+    : logical_or_expression
+    ;
+
+parameter_list
+    : parameter_declaration { $$ = $1; }
+    /* attach parameters */
+    | parameter_list COMMA parameter_declaration    { $$ = strcat($1, ", "); $$ = strcat($$, $3); }
+    ;
+
+init_declarator
+    : declarator                    { $$ = $1; }
+    | declarator ASGN initializer   { $$ = $1; }
+    ;
+
 id_stat
-    : ID    {   if(!lookup_symbol(yytext, scope_num)){
+    : ID    {   if(!lookup_symbol(yytext, scope_num, 1)){
                     sem_err_flag = 2;
                     strcpy(error_id, yytext);
                 }
@@ -261,9 +276,9 @@ expression
     ;
 
 parameter_declaration
-    : declaration_specifiers declarator {   /*printf("para %s %d\n", $2, scope_num);*/
-                                            if(!lookup_symbol($2, scope_num))
-                                                insert_symbol($2, "parameter", $1, scope_num, "NULL"); 
+    : declaration_specifiers declarator {   /* check parameter*/
+                                            if(!lookup_symbol($2, scope_num, 0))
+                                                insert_symbol($2, "parameter", $1, scope_num, "NULL");
                                             $$ = $1; 
                                         }
     | declaration_specifiers
@@ -315,11 +330,10 @@ exclusive_or_expression
     ;
 
 postfix_expression
-    : primary_expression        {   if($1 != NULL) {
-                                        //printf("post %s %d\n", $1, scope_num);
-                                        if(!lookup_symbol($1, scope_num)){
+    : primary_expression        {   /* check ID declared or not */
+                                    if($1 != NULL) {
+                                        if(!lookup_symbol($1, scope_num, 1)){
                                             // undeclared variable
-                                            //printf("variable %s not declared\n", $1);
                                             sem_err_flag = 2;
                                             strcpy(error_id, $1);
                                         }
@@ -327,11 +341,10 @@ postfix_expression
                                 }
     | postfix_expression LSB expression RSB
     | postfix_expression LB RB
-    | postfix_expression LB argument_expression_list RB {   if($1 != NULL) {
-                                                                //printf("post func %s %d\n", $1, scope_num);
-                                                                if(!lookup_symbol($1, scope_num)){
+    | postfix_expression LB argument_expression_list RB {   /* check function name declared or not */
+                                                            if($1 != NULL) {
+                                                                if(!lookup_symbol($1, scope_num, 3)){
                                                                     // undeclared function
-                                                                    //printf("function %s not declared\n", $1);
                                                                     sem_err_flag = 3;
                                                                     strcpy(error_id, $1);
                                                                 }
@@ -394,6 +407,7 @@ multiplicative_expression
     ;
 
 /* actions can be taken when meet the token or rule */
+/* types */
 type_specifier
     : INT   { $$ = strdup(yytext); }
     | FLOAT { $$ = strdup(yytext); }
@@ -410,6 +424,7 @@ int main(int argc, char** argv)
     yylineno = 0;
     create_symbol();
     yyparse();
+    /* if there is a syntax error, don't print the last line */
     if(!syn_err_flag){
         dump_symbol(0);
         printf("\nTotal lines: %d \n",yylineno);
@@ -419,7 +434,7 @@ int main(int argc, char** argv)
 
 void yyerror(char *s)
 {
-    //printf("flag %d\n", sem_err_flag);
+    /* check if there is a semantic error first */
     if(sem_err_flag == -1)
         printf("%d: %s\n", yylineno+1, buf);
     else semantic_errors(sem_err_flag, 1);
@@ -431,6 +446,7 @@ void yyerror(char *s)
     printf("\n|-----------------------------------------------|\n\n");
 }
 
+/* initialize the table */
 void create_symbol() {
     int i;
     for(i = 0; i < 200; i++){
@@ -443,18 +459,22 @@ void create_symbol() {
     }
 }
 
+/* insert symbols */
 void insert_symbol(char *name, char *kind, char *type, int scope, char *attribute) {
     struct symbols *temp, *new_symbol;
 
+    /* traversal to the last symbol */
     temp = &table[scope];
     while(temp->next != NULL){
         temp = temp->next;
     }
     
+    /* setting the new symbol */
     new_symbol = (struct symbols *)malloc(sizeof(struct symbols));
     strcpy(new_symbol->name, name);
     strcpy(new_symbol->kind, kind);
     strcpy(new_symbol->type, type);
+    /* some situations for attribute */
     if(attribute == NULL || !strcmp(attribute, "NULL")){
         // variable
         strcpy(new_symbol->attribute, "\0");
@@ -475,42 +495,60 @@ void insert_symbol(char *name, char *kind, char *type, int scope, char *attribut
 
 }
 
-int lookup_symbol(char *id, int scope) {
-    
+/* lookup symbols from scope up to 0 */
+int lookup_symbol(char *id, int scope, int mode) {  // mode 0: redeclared variable 1: undeclared variable
+                                                    //      2: redeclared function 3: undeclared function
     struct symbols *temp;
-    
-    int existed = 0;
+    int existed = 0, cur_scope = scope;
 
-    while(scope >= 0){
+    if(!mode || mode == 2){
         temp = &table[scope];
         if(table[scope].symbol_num == 0){
-            scope--;
-            continue;
+            existed = 0;
         }
-        while(temp != NULL){
-            // printf("in lookup %s\n", temp->name);
-            if(!strcmp(temp->name, id)){
-                if(!temp->defined) existed = 2;  
-                else existed = 1;
-                break;
+        else {
+            while(temp != NULL){
+                /* if this is a variable already existed */
+                if(!strcmp(temp->name, id)){
+                    existed = 1;
+                    break;
+                }
+                temp = temp->next;
             }
-            temp = temp->next;
         }
-        scope--;
     }
-    
-
+    else if(mode || mode == 3){
+        while(scope >= 0){
+            temp = &table[scope];
+            if(table[scope].symbol_num == 0){
+                scope--;
+                continue;
+            }
+            while(temp != NULL){
+                if(!strcmp(temp->name, id)){
+                    /* if this is a function name and it is undfined */
+                    if(!temp->defined) existed = 2;  
+                    else existed = 1;
+                    break;
+                }
+                temp = temp->next;
+            }
+            scope--;
+        }
+    }
+    // return 0: not exist 1: exist 2: forwarding
     return existed;
 }
 
+/* dump symbols */
 void dump_symbol(int scope) {
-    //printf("scope %d %d %d\n", scope, table[scope].printed, table[scope].symbol_num);
+    /* if there is not symbol in this scope, return */
     if(table[scope].symbol_num == 0)    return;
     
     printf("\n%-10s%-10s%-12s%-10s%-10s%-10s\n\n",
            "Index", "Name", "Kind", "Type", "Scope", "Attribute");
     
-    //int count = table[scope].printed;
+    /* traversal and print */
     int i = 0, index = 0;
     while(table[scope].next != NULL){
         struct symbols *temp = &table[scope];
@@ -520,16 +558,16 @@ void dump_symbol(int scope) {
         if(strcmp(temp->attribute, "\0"))    printf("%s\n", temp->attribute);
         else printf("\n");
         
+        /* after printed, delete and free */
         table[scope].next = temp->next;
         free(temp);
         i++;
     }
     printf("\n");
     table[scope].symbol_num = 0;
-    //table[scope].printed = i;
-    // printf("print from %d\n", table[scope].printed);
 }
 
+/* semantic error */
 void semantic_errors(int kind_of_error, int offset){
     int line = yylineno + offset;
     switch(kind_of_error){
@@ -566,8 +604,9 @@ void semantic_errors(int kind_of_error, int offset){
     }
 }
 
+/* delete the parameter */
 void delete_parameter_symbol(int scope) {
-    
+    /* traversal and delete the symbols of the forwading function */
     while(table[scope].next != NULL){
         struct symbols *temp = &table[scope];
         temp = temp->next;
@@ -578,6 +617,7 @@ void delete_parameter_symbol(int scope) {
     table[scope].symbol_num = 0;
 }
 
+/* fill the attribute to the undefined function */
 void fill_parameter(int scope, char *id, char *attribute) {
     struct symbols *temp = &table[scope];
     temp = temp->next;
@@ -585,6 +625,7 @@ void fill_parameter(int scope, char *id, char *attribute) {
     while(temp != NULL){
         if(!strcmp(temp->name, id)){
             strcpy(temp->attribute, attribute);
+            temp->defined = 1;
             break;
         }
         temp = temp->next;        

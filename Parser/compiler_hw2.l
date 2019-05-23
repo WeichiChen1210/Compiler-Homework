@@ -9,7 +9,7 @@ extern int yylineno;
 char buf[BUF_SIZE];
 int line_num = 0;
 int scope = 0;
-char temp[20];
+char temp[20];  // temp is used to save the previous yytext
 int rsb = 0;
 
 /* This macro is used to record code line */
@@ -64,12 +64,9 @@ id			{letter}+({letter}|{digit})*
 "("		{ CONCAT; scope++; return LB; }
 ")"		{ CONCAT; scope--; return RB; }
 "{"		{ CONCAT; scope++; return LCB; }
-"}"		{   CONCAT; scope--; 
-            // printf("%d: %s%s", yylineno+1, buf, "\n");
-            // dump_symbol(scope+1);
-            // memset(buf, 0, BUF_SIZE);
-            // strcpy(buf, " ");
-            // dumped = 1;
+ /* Situation that it encounters } when } isn't followed by \n statement, delay until finish reading the whole line */
+"}"		{   CONCAT; scope--;
+            /* set the rsb flag */
             rsb = 1;
             return RCB; 
         }
@@ -112,6 +109,7 @@ id			{letter}+({letter}|{digit})*
  /* C type Comment */
 "/*"				{ BEGIN COMMENT; CONCAT; }
 <COMMENT>[^*\n]+	{ CONCAT; }
+ /* encounter \n then print the whole line, clean the buffer */
 <COMMENT>\n			{ CONCAT; line_num++; printf("%d: %s", line_num, buf); memset(buf, 0, BUF_SIZE); }
 <COMMENT>"*"		{ CONCAT; }
 <COMMENT>"*/"		{ BEGIN INITIAL; CONCAT; }
@@ -125,22 +123,34 @@ id			{letter}+({letter}|{digit})*
  /* others */
 
 [;]         { CONCAT; return SEMICOLON; }
-[\n]        {   if(sem_err_flag != -1){
+ /* encounter \n, there are several situation with \n */
+[\n]        {   /* when there is a semantic error(the flag is from yacc),
+                 * call semantic_errors to deal with the error
+                 */
+                if(sem_err_flag != -1){
                     semantic_errors(sem_err_flag, 0);
+                    /* reset the flag */
                     sem_err_flag = -1;
                 }
+                /* if there is a } before \n and } is not followed by a \n(delay until the whole line is over */
                 else if(strcmp(temp, "}") && rsb){
                     printf("%d: %s%s", yylineno, buf, "\n");
+                    /* dump the table */
                     dump_symbol(scope);
                     strcpy(temp, "\0");
+                    /* reset the rsb flag */
                     rsb = 0;
                 }
+                /* if there is a } before \n and it is followed by \n */
                 else if(!strcmp(temp, "}")) {
                     printf("%d: %s%s", yylineno, buf, "\n");
+                    /* dump the table */
                     dump_symbol(scope+1);
                     strcpy(temp, "\0");
+                    /* reset rsb flag */
                     rsb = 0;
                 }
+                /* other normal situation */
                 else{
                     CONCAT; line_num++;
                     if(!strcmp(buf, "\n")) printf("%d:\n", yylineno);

@@ -15,12 +15,6 @@ parser:
 test: compile
 	./${EXE} < input/zero_error.c
 
-syn: compile
-	./${EXE} < input/syntactic_error.c
-
-sem: compile
-	./${EXE} < input/semantic_error.c
-
 clean:
 	rm ${EXE} y.tab* lex.* y.output
 
