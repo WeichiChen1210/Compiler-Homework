@@ -87,7 +87,9 @@ void gencode_function();
 %type <string> type_specifier declaration_specifiers direct_declarator declarator func_declarator declaration init_declarator_list init_declarator initializer
 %type <string> function_definition parameter_list parameter_declaration
 %type <string> postfix_expression primary_expression unary_expression multiplicative_expression
-%type <string> additive_expression relational_expression equality_expression
+%type <string> additive_expression relational_expression equality_expression  and_expression inclusive_or_expression exclusive_or_expression
+%type <string> logical_and_expression logical_or_expression conditional_expression assignment_expression
+%type <string> initializer_list 
 /* Yacc will start at this nonterminal */
 %start translation_unit
 
@@ -111,6 +113,7 @@ function_definition
                                                                 temp = strtok($2, ":");
                                                                 /* ID */
                                                                 $2 = temp;
+                                                                printf("%s\n", $2);
                                                                 /* parameters */
                                                                 temp = strtok(NULL, ":");
                                                                 /* lookup */
@@ -128,8 +131,11 @@ function_definition
                                                                     /* save the ID to use in semantic function */
                                                                     strcpy(error_id, $2);
                                                                 }
-                                                                /* return 0, insert the symbol */
-                                                                else insert_symbol($2, "function", $1, scope_num, temp, "NULL"); 
+                                                                /* return 0, new function, insert the symbol */
+                                                                else {
+                                                                    
+                                                                    insert_symbol($2, "function", $1, scope_num, temp, "NULL");
+                                                                }    
                                                             }
     | declarator declaration_list compound_statement
     | declarator compound_statement
@@ -203,6 +209,7 @@ declaration
     : declaration_specifiers SEMICOLON  
     | declaration_specifiers init_declarator_list SEMICOLON     {   /* variable declaration */
                                                                     int result = lookup_symbol($2, scope_num, 0);
+                                                                    printf("decl %s\n", $2);
                                                                     // printf("declaration %s %s %d\n", $1, $2, scope_num);
                                                                     if(result){
                                                                         // redeclared variable
@@ -218,6 +225,7 @@ declaration
                                                                         }
                                                                         else{
                                                                             printf("local\n");
+
                                                                         }
                                                                         insert_symbol($2, "variable", $1, scope_num, "NULL", constants);
                                                                         strcpy(constants, "NULL");
@@ -231,7 +239,7 @@ identifier_list
     ;
 
 init_declarator_list
-    : init_declarator                               { $$ = $1; }
+    : init_declarator                               { $$ = $1; printf("init_decl_list %s\n", $$); }
     | init_declarator_list COMMA init_declarator
     ;
 
@@ -281,7 +289,7 @@ print_statement
     ;
 
 conditional_expression
-    : logical_or_expression
+    : logical_or_expression { $$ = $1; printf("condi %s\n", $$); }
     ;
 
 parameter_list
@@ -293,7 +301,7 @@ parameter_list
 init_declarator
     : declarator                    { $$ = $1; }
     | func_declarator               { $$ = $1; }
-    | declarator ASGN initializer   { $$ = $1; /*printf("init_declarator %s\n", $1);*/ }
+    | declarator ASGN initializer   { $$ = $1; printf("init_declarator %s\n", $3); }
     ;
 
 id_stat
@@ -305,7 +313,7 @@ id_stat
     ;
 
 logical_or_expression
-    : logical_and_expression
+    : logical_and_expression    { $$ = $1; printf("logi or %s\n", $$); }
     | logical_or_expression OR logical_and_expression
     ;
 
@@ -324,18 +332,18 @@ parameter_declaration
     ;
 
 initializer
-    : assignment_expression             {;}
+    : assignment_expression             { $$ = $1; printf("initializer %s\n", $$); }
     | LCB initializer_list RCB          {;}
     | LCB initializer_list COMMA RCB    {;}
     ;
 
 logical_and_expression
-    : inclusive_or_expression
+    : inclusive_or_expression   { $$ = $1; printf("logic and %s\n", $$); }
     | logical_and_expression AND inclusive_or_expression
     ;
 
 assignment_expression
-    : conditional_expression
+    : conditional_expression    { $$ = $1; printf("assign %s\n", $$); }
     | unary_expression assignment_operator assignment_expression
     ;
 
@@ -345,7 +353,7 @@ initializer_list
     ;
 
 inclusive_or_expression
-    : exclusive_or_expression
+    : exclusive_or_expression   { $$ = $1; printf("incl %s\n", $$); }
     ;
 
 unary_expression
@@ -365,7 +373,7 @@ assignment_operator
     ;
 
 exclusive_or_expression
-    : and_expression
+    : and_expression            { $$ = $1; printf("excl %s\n", $$); }
     ;
 
 postfix_expression
@@ -409,7 +417,7 @@ unary_operator
     ;
 
 and_expression
-    : equality_expression
+    : equality_expression       { $$ = $1; printf("and %s\n", $$); }
     ;
 
 primary_expression
@@ -447,13 +455,13 @@ argument_expression_list
     ;
 
 equality_expression
-    : relational_expression                             { $$ = $1; /*printf("equal %s\n", $$);*/ }
+    : relational_expression                             { $$ = $1; printf("equal %s\n", $$); }
     | equality_expression EQ relational_expression
     | equality_expression NE relational_expression
     ;
 
 relational_expression
-    : additive_expression                               { $$ = $1; /*printf("rel %s\n", $$);*/ }
+    : additive_expression                               { $$ = $1; printf("rel %s\n", $$); }
     | relational_expression LT additive_expression
     | relational_expression MT additive_expression
     | relational_expression LTE additive_expression
@@ -461,13 +469,13 @@ relational_expression
     ;
 
 additive_expression
-    : multiplicative_expression                         { $$ = $1; /*printf("add %s\n", $$);*/ }
+    : multiplicative_expression                         { $$ = $1; printf("add %s\n", $$); }
     | additive_expression ADD multiplicative_expression
     | additive_expression SUB multiplicative_expression
     ;
 
 multiplicative_expression
-    : unary_expression                                  { $$ = $1; /*printf("mul %s\n", $$);*/ }
+    : unary_expression                                  { $$ = $1; printf("mul %s\n", $$); }
     | multiplicative_expression MUL unary_expression
     | multiplicative_expression DIV unary_expression
     | multiplicative_expression MOD unary_expression
@@ -641,7 +649,7 @@ void dump_symbol(int scope) {
         temp = temp->next;
 
         printf("%-10d%-10s%-12s%-10s%-10d", index++, temp->name, temp->kind, temp->type, temp->scope);
-        if(strcmp(temp->attribute, "\0"))    printf("%s", temp->attribute);
+        if(strcmp(temp->attribute, "\0"))    printf("%s\n", temp->attribute);
         else printf("\n");
         /* after printed, delete and free */
         table[scope].next = temp->next;
@@ -772,7 +780,7 @@ void j_global_var_declaration(char* id, char *value, char* constant_type){
         int len = strlen(value);
         value[len-1] = '\0';    // take out the last '/'
         sprintf(temp, "\"%s\"", value); // add ""
-        fprintf(file, ".field public static %s S = %s\n", id, temp);
+        fprintf(file, ".field public static %s Ljava/lang/String; = %s\n", id, temp);
         strcpy(value, temp);
     }
     else if(!strcmp(constant_type, "bool")){        
@@ -787,4 +795,10 @@ void j_global_var_declaration(char* id, char *value, char* constant_type){
 void j_local_var_declaration(char* id, char *value, char* constant_type){
 
     return;
+}
+
+void j_func_declaration(char* id, char *value, char* return_type){
+    if(!strcmp(id, "main")){
+
+    }
 }

@@ -3,3 +3,10 @@ float b = 6;
 int c;
 bool d = true;
 string str = "Hello";
+
+int main(){
+    int temp = 5;
+    int temp1 = a + 4;
+
+    return 0;
+}
