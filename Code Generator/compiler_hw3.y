@@ -14,12 +14,12 @@ int syn_err_flag = 0;
 char error_id[50];
 int scope_num = 0;
 
-int constant_type = -1; // 0 int 1 float 2 String
-char constants[50] = "";
+char constants[50] = "NULL";
 
 FILE *file; // To generate .j file for Jasmin
 
 struct symbols{
+    char value[50];
     char name[50];
     char kind[50];
     char type[50];
@@ -39,7 +39,7 @@ void yyerror(char *s);
 /* Symbol table function - you can add new function if needed. */
 int lookup_symbol(char *id, int scope, int mode);
 void create_symbol();
-void insert_symbol(char *name, char *kind, char *type, int scope, char *attribute);
+void insert_symbol(char *name, char *kind, char *type, int scope, char *attribute, char *value);
 void dump_symbol(int scope);
 void semantic_errors(int kind_of_error, int offset);    // print semantic errors messages
 void delete_parameter_symbol(int scope);                // delete the parameter of forwarding function
@@ -48,6 +48,7 @@ void free_symbol_table();
 
 /* generate jasmin code */
 void j_global_var_declaration(char* id, char* value, char* constant_type);
+void j_local_var_declaration(char* id, char* value, char* constant_type);
 char* casting(char* value, int type);
 
 /* code generation functions, just an example! */
@@ -128,7 +129,7 @@ function_definition
                                                                     strcpy(error_id, $2);
                                                                 }
                                                                 /* return 0, insert the symbol */
-                                                                else insert_symbol($2, "function", $1, scope_num, temp); 
+                                                                else insert_symbol($2, "function", $1, scope_num, temp, "NULL"); 
                                                             }
     | declarator declaration_list compound_statement
     | declarator compound_statement
@@ -145,7 +146,7 @@ function_definition
                                                             strcpy(error_id, $2);
                                                         }
                                                         /* false, insert */
-                                                        else insert_symbol($2, "function", $1, scope_num, notdef);
+                                                        else insert_symbol($2, "function", $1, scope_num, notdef, "NULL");
                                                         /* delete the symbols of the forwarding function */
                                                         delete_parameter_symbol(scope_num+1);
                                                     }
@@ -209,12 +210,17 @@ declaration
                                                                         strcpy(error_id, $2);
                                                                     }
                                                                     else{
-                                                                        insert_symbol($2, "variable", $1, scope_num, "NULL");
+                                                                        /* global variable declaration */
                                                                         if(scope_num == 0){
                                                                             // printf("global %s %s %s\n", $1, $2, constants);
+                                                                            // generate code
                                                                             j_global_var_declaration($2, constants, $1);
-                                                                            strcpy(constants, "NULL");
                                                                         }
+                                                                        else{
+                                                                            printf("local\n");
+                                                                        }
+                                                                        insert_symbol($2, "variable", $1, scope_num, "NULL", constants);
+                                                                        strcpy(constants, "NULL");
                                                                     }
                                                                 }
     ;
@@ -270,6 +276,8 @@ jump_statement
 print_statement
     : PRINT LB id_stat RB SEMICOLON
     | PRINT LB QUOTA STR_CONST QUOTA RB SEMICOLON
+    | PRINT LB I_CONST RB SEMICOLON
+    | PRINT LB F_CONST RB SEMICOLON
     ;
 
 conditional_expression
@@ -309,7 +317,7 @@ expression
 parameter_declaration
     : declaration_specifiers declarator {   /* check parameter*/
                                             if(!lookup_symbol($2, scope_num, 0))
-                                                insert_symbol($2, "parameter", $1, scope_num, "NULL");
+                                                insert_symbol($2, "parameter", $1, scope_num, "NULL", "NULL");
                                             $$ = $1; 
                                         }
     | declaration_specifiers
@@ -366,11 +374,11 @@ postfix_expression
                                         char temp[50];
                                         strcpy(temp, $1);
                                         int len = strlen(temp);
-                                        // printf("post %s len %d\n", temp, len);
+                                        /* passing constants end with '/' */
                                         if(temp[len-1] == '/'){
                                             temp[len-1] = '\0';
-                                            // printf("%s\n", temp);
                                             $$ = temp;
+                                            len = strlen(constants);
                                         }
                                         else if(!lookup_symbol($1, scope_num, 1)){
                                             // undeclared variable
@@ -406,29 +414,30 @@ and_expression
 
 primary_expression
     : ID                        { $$ = strdup(yytext); }
-    | I_CONST                   {   strcpy(constants, yytext);
+    | I_CONST                   {   strcpy(constants, strdup(yytext));
                                     printf("%s\n", constants);
                                     char temp[50];
                                     sprintf(temp, "%s/", strdup(yytext));
                                     $$ = temp;
-                                    constant_type = 0;
                                 }
-    | F_CONST                   {   strcpy(constants, yytext);
+    | F_CONST                   {   strcpy(constants, strdup(yytext));
                                     printf("%s\n", constants);
                                     char temp[50];
                                     sprintf(temp, "%s/", strdup(yytext));
                                     $$ = temp;
-                                    constant_type = 1;
                                 }
-    | QUOTA STR_CONST QUOTA     {   /*strcpy(constants, yytext);
-                                    printf("%s\n", constants);
-                                    char temp[50];
-                                    sprintf(temp, "%s/", strdup(yytext));
-                                    $$ = temp;
-                                    constant_type = 2;*/
+    | QUOTA STR_CONST{  printf("%s\n", strdup(yytext)); 
+                        sprintf(constants, "%s/", strdup(yytext));                        
+                    } QUOTA     {   
+                                    $$ = constants;
+                                    // printf("%s\n", $$);
                                 }
-    | TRUE                      { ; }
-    | FALSE                     { ; }
+    | TRUE                      {   strcpy(constants, "true/");
+                                    $$ = strdup(constants);
+                                }
+    | FALSE                     {   strcpy(constants, "false/");
+                                    $$ = strdup(constants);
+                                }
     | LB expression RB          { ; }
     ;
 
@@ -533,7 +542,7 @@ void create_symbol() {
 }
 
 /* insert symbols */
-void insert_symbol(char *name, char *kind, char *type, int scope, char *attribute) {
+void insert_symbol(char *name, char *kind, char *type, int scope, char *attribute, char *value) {
     struct symbols *temp, *new_symbol;
 
     /* traversal to the last symbol */
@@ -547,6 +556,10 @@ void insert_symbol(char *name, char *kind, char *type, int scope, char *attribut
     strcpy(new_symbol->name, name);
     strcpy(new_symbol->kind, kind);
     strcpy(new_symbol->type, type);
+    
+    if(!strcmp(value, "NULL")) strcpy(new_symbol->value, "\0");
+    else    strcpy(new_symbol->value, value);
+    
     /* some situations for attribute */
     if(attribute == NULL || !strcmp(attribute, "NULL")){
         // variable
@@ -628,9 +641,8 @@ void dump_symbol(int scope) {
         temp = temp->next;
 
         printf("%-10d%-10s%-12s%-10s%-10d", index++, temp->name, temp->kind, temp->type, temp->scope);
-        if(strcmp(temp->attribute, "\0"))    printf("%s\n", temp->attribute);
+        if(strcmp(temp->attribute, "\0"))    printf("%s", temp->attribute);
         else printf("\n");
-        
         /* after printed, delete and free */
         table[scope].next = temp->next;
         free(temp);
@@ -755,8 +767,24 @@ void j_global_var_declaration(char* id, char *value, char* constant_type){
             fprintf(file, ".field public static %s F = %s\n", id, value);
         }
     }
-    else if(!strcmp(constant_type, "bool")){
-        if(!strcmp(value, "NULL"))   fprintf(file, ".field public static %s Z\n", id);
-        else fprintf(file, ".field public static %s Z = %s\n", id, value);
+    else if(!strcmp(constant_type, "string")){
+        char temp[50];
+        int len = strlen(value);
+        value[len-1] = '\0';    // take out the last '/'
+        sprintf(temp, "\"%s\"", value); // add ""
+        fprintf(file, ".field public static %s S = %s\n", id, temp);
+        strcpy(value, temp);
     }
+    else if(!strcmp(constant_type, "bool")){        
+        if(!strcmp(value, "NULL"))   fprintf(file, ".field public static %s Z = 1\n", id);  // not initialize
+        int len = strlen(value);
+        value[len-1] = '\0';    // take out the last '/'
+        if(!strcmp(value, "true")) fprintf(file, ".field public static %s Z = 1\n", id);
+        else fprintf(file, ".field public static %s Z = 0\n", id);
+    }
+}
+
+void j_local_var_declaration(char* id, char *value, char* constant_type){
+
+    return;
 }
