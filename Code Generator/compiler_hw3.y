@@ -14,6 +14,9 @@ int syn_err_flag = 0;
 char error_id[50];
 int scope_num = 0;
 
+int constant_type = -1; // 0 int 1 float 2 String
+char constants[50] = "";
+
 FILE *file; // To generate .j file for Jasmin
 
 struct symbols{
@@ -41,8 +44,11 @@ void dump_symbol(int scope);
 void semantic_errors(int kind_of_error, int offset);    // print semantic errors messages
 void delete_parameter_symbol(int scope);                // delete the parameter of forwarding function
 void fill_parameter(int scope, char *id, char *attribute);  // refill the parameters to forwarding functions
-
 void free_symbol_table();
+
+/* generate jasmin code */
+void j_global_var_declaration(char* id, char* value, char* constant_type);
+char* casting(char* value, int type);
 
 /* code generation functions, just an example! */
 void gencode_function();
@@ -77,10 +83,10 @@ void gencode_function();
 
 /* Nonterminal with return, which need to sepcify type */
 // %type <f_val> stat compound_statement expression_statement initializer print_func
-%type <string> type_specifier declaration_specifiers direct_declarator declarator func_declarator declaration init_declarator_list init_declarator
+%type <string> type_specifier declaration_specifiers direct_declarator declarator func_declarator declaration init_declarator_list init_declarator initializer
 %type <string> function_definition parameter_list parameter_declaration
-%type <string> postfix_expression primary_expression
-
+%type <string> postfix_expression primary_expression unary_expression multiplicative_expression
+%type <string> additive_expression relational_expression equality_expression
 /* Yacc will start at this nonterminal */
 %start translation_unit
 
@@ -196,12 +202,20 @@ declaration
     : declaration_specifiers SEMICOLON  
     | declaration_specifiers init_declarator_list SEMICOLON     {   /* variable declaration */
                                                                     int result = lookup_symbol($2, scope_num, 0);
+                                                                    // printf("declaration %s %s %d\n", $1, $2, scope_num);
                                                                     if(result){
                                                                         // redeclared variable
                                                                         sem_err_flag = 0;
                                                                         strcpy(error_id, $2);
                                                                     }
-                                                                    else insert_symbol($2, "variable", $1, scope_num, "NULL");
+                                                                    else{
+                                                                        insert_symbol($2, "variable", $1, scope_num, "NULL");
+                                                                        if(scope_num == 0){
+                                                                            // printf("global %s %s %s\n", $1, $2, constants);
+                                                                            j_global_var_declaration($2, constants, $1);
+                                                                            strcpy(constants, "NULL");
+                                                                        }
+                                                                    }
                                                                 }
     ;
 
@@ -271,7 +285,7 @@ parameter_list
 init_declarator
     : declarator                    { $$ = $1; }
     | func_declarator               { $$ = $1; }
-    | declarator ASGN initializer   { $$ = $1; }
+    | declarator ASGN initializer   { $$ = $1; /*printf("init_declarator %s\n", $1);*/ }
     ;
 
 id_stat
@@ -302,9 +316,9 @@ parameter_declaration
     ;
 
 initializer
-    : assignment_expression
-    | LCB initializer_list RCB
-    | LCB initializer_list COMMA RCB
+    : assignment_expression             {;}
+    | LCB initializer_list RCB          {;}
+    | LCB initializer_list COMMA RCB    {;}
     ;
 
 logical_and_expression
@@ -327,10 +341,10 @@ inclusive_or_expression
     ;
 
 unary_expression
-    : postfix_expression
-    | INC unary_expression
-    | DEC unary_expression
-    | unary_operator unary_expression
+    : postfix_expression        { $$ = $1; /*printf("unary %s\n", $$);*/ }
+    | INC unary_expression      {}
+    | DEC unary_expression      {}
+    | unary_operator unary_expression   {}
     ;
 
 assignment_operator
@@ -349,7 +363,16 @@ exclusive_or_expression
 postfix_expression
     : primary_expression        {   /* check ID declared or not */
                                     if($1 != NULL) {
-                                        if(!lookup_symbol($1, scope_num, 1)){
+                                        char temp[50];
+                                        strcpy(temp, $1);
+                                        int len = strlen(temp);
+                                        // printf("post %s len %d\n", temp, len);
+                                        if(temp[len-1] == '/'){
+                                            temp[len-1] = '\0';
+                                            // printf("%s\n", temp);
+                                            $$ = temp;
+                                        }
+                                        else if(!lookup_symbol($1, scope_num, 1)){
                                             // undeclared variable
                                             sem_err_flag = 2;
                                             strcpy(error_id, $1);
@@ -383,9 +406,27 @@ and_expression
 
 primary_expression
     : ID                        { $$ = strdup(yytext); }
-    | I_CONST                   { ; }
-    | F_CONST                   { ; }
-    | QUOTA STR_CONST QUOTA     { ; }
+    | I_CONST                   {   strcpy(constants, yytext);
+                                    printf("%s\n", constants);
+                                    char temp[50];
+                                    sprintf(temp, "%s/", strdup(yytext));
+                                    $$ = temp;
+                                    constant_type = 0;
+                                }
+    | F_CONST                   {   strcpy(constants, yytext);
+                                    printf("%s\n", constants);
+                                    char temp[50];
+                                    sprintf(temp, "%s/", strdup(yytext));
+                                    $$ = temp;
+                                    constant_type = 1;
+                                }
+    | QUOTA STR_CONST QUOTA     {   /*strcpy(constants, yytext);
+                                    printf("%s\n", constants);
+                                    char temp[50];
+                                    sprintf(temp, "%s/", strdup(yytext));
+                                    $$ = temp;
+                                    constant_type = 2;*/
+                                }
     | TRUE                      { ; }
     | FALSE                     { ; }
     | LB expression RB          { ; }
@@ -397,13 +438,13 @@ argument_expression_list
     ;
 
 equality_expression
-    : relational_expression
+    : relational_expression                             { $$ = $1; /*printf("equal %s\n", $$);*/ }
     | equality_expression EQ relational_expression
     | equality_expression NE relational_expression
     ;
 
 relational_expression
-    : additive_expression
+    : additive_expression                               { $$ = $1; /*printf("rel %s\n", $$);*/ }
     | relational_expression LT additive_expression
     | relational_expression MT additive_expression
     | relational_expression LTE additive_expression
@@ -411,13 +452,13 @@ relational_expression
     ;
 
 additive_expression
-    : multiplicative_expression
+    : multiplicative_expression                         { $$ = $1; /*printf("add %s\n", $$);*/ }
     | additive_expression ADD multiplicative_expression
     | additive_expression SUB multiplicative_expression
     ;
 
 multiplicative_expression
-    : unary_expression
+    : unary_expression                                  { $$ = $1; /*printf("mul %s\n", $$);*/ }
     | multiplicative_expression MUL unary_expression
     | multiplicative_expression DIV unary_expression
     | multiplicative_expression MOD unary_expression
@@ -435,7 +476,6 @@ type_specifier
 
 %%
 
-/* C code section */
 
 /* C code section */
 int main(int argc, char** argv)
@@ -443,10 +483,9 @@ int main(int argc, char** argv)
     yylineno = 0;
     
     file = fopen("compiler_hw3.j","w");
-
     fprintf(file,   ".class public compiler_hw3\n"
-                    ".super java/lang/Object\n"
-                    ".method public static main([Ljava/lang/String;)V\n");
+                    ".super java/lang/Object\n");
+    //                ".method public static main([Ljava/lang/String;)V\n");
     
     create_symbol();
     yyparse();
@@ -668,3 +707,56 @@ void fill_parameter(int scope, char *id, char *attribute) {
 
 /* code generation functions */
 void gencode_function() {}
+
+char* casting(char* value, int type){
+    int i;
+    if(type == 0){   // int
+        // check if there is a dot
+        for(i = 0; i < strlen(value); i++){
+            if(value[i] == '.') {   // if yes, change to int
+                value[i] = '\0';
+                break;
+            }
+        }
+    }
+    else{           // float
+        int dot = 0;
+        // check if there is a dot
+        for(i = 0; i < strlen(value); i++){
+            if(value[i] == '.') {   // if yes, dot = 1
+                dot = 1;
+                break;
+            }
+        }
+        if(!dot){   // if there is no dot, add .0 to it
+            strcat(value, ".0\0");
+        }
+    }
+    return value;
+    
+}
+
+/* generating the variable declaration */
+void j_global_var_declaration(char* id, char *value, char* constant_type){
+    /* classify with variable type */
+    if(!strcmp(constant_type, "int")){
+        if(!strcmp(value, "NULL"))   fprintf(file, ".field public static %s I = 0\n", id);  // not initialized, assign 0
+        /* check type casting */
+        else{
+            casting(value, 0);
+            fprintf(file, ".field public static %s I = %s\n", id, value);
+        }
+    }
+    else if(!strcmp(constant_type, "float")){
+        if(!strcmp(value, "NULL"))   fprintf(file, ".field public static %s F = 0.0\n", id);
+        else{
+            /* check type casting */
+            casting(value, 1);
+            fprintf(file, ".field public static %s F = %s\n", id, value);
+        }
+    }
+    else if(!strcmp(constant_type, "bool")){
+        if(!strcmp(value, "NULL"))   fprintf(file, ".field public static %s Z\n", id);
+        else fprintf(file, ".field public static %s Z = %s\n", id, value);
+    }
+}
