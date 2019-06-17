@@ -20,6 +20,7 @@ char constants[50] = "NULL";
 FILE *file; // To generate .j file for Jasmin
 
 struct symbols{
+    int index;
     char value[50];
     char name[50];
     char kind[50];
@@ -52,7 +53,7 @@ void delete_parameter_symbol(int scope);                // delete the parameter 
 void fill_parameter(int scope, char *id, char *attribute);  // refill the parameters to forwarding functions
 void free_symbol_table();
 void search_type(char* id, int scope, char* result);
-
+int search_index(char* id, int scope);
 /* generate jasmin code */
 void gencode_function(char* input);
 char* casting(char* value, int type);
@@ -283,20 +284,27 @@ jump_statement
     ;
 
 print_statement
-    : PRINT LB id_stat RB SEMICOLON                 {   char type[10];
-                                                        search_type(strdup($3), scope_num, type);
-                                                        printf("%s %s %d\n", $3, type, scope_num);
-                                                        j_print($3, type);
+    : PRINT LB id_stat RB SEMICOLON                 {   if($3 != NULL){                 // if variable undeclared, do nothing
+                                                            char type[10];
+                                                            search_type(strdup($3), scope_num, type);
+                                                            // printf("%s %s %d\n", $3, type, scope_num);
+                                                            j_print($3, type);
+                                                        }                                                        
                                                     }
-    | PRINT LB QUOTA STR_CONST QUOTA RB SEMICOLON   {   ;
+    | PRINT LB QUOTA STR_CONST{ strcpy(constants, strdup(yytext)); } QUOTA RB SEMICOLON{
+                                                        // printf("print %s %s %d\n", constants, "string", scope_num);
+                                                        char temp[50];
+                                                        sprintf(temp, "\"%s\"", constants);
+                                                        j_print(temp, "string");
+                                                        strcpy(constants, "NULL");
                                                     }
-    | PRINT LB I_CONST{ strcpy(constants, strdup(yytext));} RB SEMICOLON{
-                                                        printf("print %s %s %d\n", constants, "int", scope_num);
+    | PRINT LB I_CONST{ strcpy(constants, strdup(yytext)); } RB SEMICOLON{
+                                                        // printf("print %s %s %d\n", constants, "int", scope_num);
                                                         j_print(constants, "int");
                                                         strcpy(constants, "NULL");
                                                     }
     | PRINT LB F_CONST{ strcpy(constants, strdup(yytext));} RB SEMICOLON{
-                                                        printf("print %s %s %d\n", constants, "float", scope_num);
+                                                        // printf("print %s %s %d\n", constants, "float", scope_num);
                                                         j_print(constants, "float");
                                                         strcpy(constants, "NULL");
                                                     }
@@ -623,6 +631,7 @@ void insert_symbol(char *name, char *kind, char *type, int scope, char *attribut
         strcpy(new_symbol->attribute, attribute);
         new_symbol->defined = 1;
     }
+    new_symbol->index = table[scope].symbol_num;
     new_symbol->scope = scope;
     new_symbol->printed = -1;
     new_symbol->next = NULL;
@@ -670,6 +679,7 @@ int lookup_symbol(char *id, int scope, int mode) {  // mode 0: redeclared variab
                 temp = temp->next;
             }
             scope--;
+            if(existed) break;
         }
     }
     // return 0: not exist 1: exist 2: forwarding
@@ -767,27 +777,55 @@ void fill_parameter(int scope, char *id, char *attribute) {
     }
 }
 
+/* lookup symbol table to find the type of the variable */
 void search_type(char* id, int scope, char* result){
     struct symbols *temp;
 
+    int found = 0;
     while(scope >= 0){
         temp = &table[scope];
-        if(table[scope].symbol_num == 0){
-            return;
-        }
-        else {
+        if(table[scope].symbol_num > 0){
             while(temp != NULL){
                 /* if this is a variable already existed */
                 if(!strcmp(temp->name, id)){
-                    printf("find type %s\n", temp->type);
+                    // printf("find type %s\n", temp->type);
                     strcpy(result, temp->type);
+                    found = 1;
                     break;
                 }
                 temp = temp->next;
             }
         }
+        if(found)   break;
         scope--;
     }
+}
+
+/* lookup symbol table to find the index of the variable */
+int search_index(char* id, int scope){
+    struct symbols *temp;
+    int found = 0, index;
+
+    while(scope > 0){
+        temp = &table[scope];
+        if(table[scope].symbol_num > 0){
+            while(temp != NULL){
+                /* if this is a variable already existed */
+                if(!strcmp(temp->name, id)){
+                    // printf("find index %d\n", temp->index);
+                    index = temp->index;
+                    found = 1;  // in local
+                    break;
+                }
+                temp = temp->next;
+            }
+        }
+        if(found) break;
+        scope--;
+    }
+    /* variable in global */
+    if(!found)  index = -1;
+    return index;
 }
 
 /* code generation functions */
@@ -795,6 +833,7 @@ void gencode_function(char* input) {
     fputs(input, file);
 }
 
+/* handle casting */
 char* casting(char* value, int type){
     int i;
     if(type == 0){   // int
@@ -870,6 +909,7 @@ void j_global_var_declaration(char* id, char *value, char* constant_type){
     }
 }
 
+
 void j_local_var_declaration(char* id, char *value, char* constant_type){
 
     return;
@@ -881,31 +921,51 @@ void j_func_declaration(char* id, char *value, char* return_type){
     }
 }
 
+/* generating the print statement */
 void j_print(char* item, char *type){
     char out_str[200];
+
+    /* print string constants */
+    if(item[0] == '\"' && !strcmp(type, "string")){
+        sprintf(out_str, "ldc %s\ngetstatic java/lang/System/out Ljava/io/PrintStream;\nswap\ninvokevirtual java/io/PrintStream/println(Ljava/lang/String;)V\n", item);
+    }
     /* print variable */
-    if(!isdigit(item[0])){
-        printf("j_print %c %s\n", item[0], type);
-        printf("print ID\n");
+    else if(!isdigit(item[0])){
+        int index = search_index(item, scope_num);      // get index
+        // printf("index %d\n", index);
+        if(index >= 0){    // local
+            if(!strcmp(type, "int")){
+                sprintf(out_str, "iload %d\ngetstatic java/lang/System/out Ljava/io/PrintStream;\nswap\ninvokevirtual java/io/PrintStream/println(I)V\n", index);
+            }
+            else if(!strcmp(type, "float")){
+                sprintf(out_str, "fload %d\ngetstatic java/lang/System/out Ljava/io/PrintStream;\nswap\ninvokevirtual java/io/PrintStream/println(F)V\n", index);
+            }
+            // else if(!strcmp(type, "string")){
+            //     sprintf(out_str, "???load %s\ngetstatic java/lang/System/out Ljava/io/PrintStream;\nswap\ninvokevirtual java/io/PrintStream/println(Ljava/lang/String;)V\n", index);
+            //     gencode_function(out_str);
+            // }
+        }
+        else{       // global
+            if(!strcmp(type, "int")){
+                sprintf(out_str, "getstatic compiler_hw3/%s I\ngetstatic java/lang/System/out Ljava/io/PrintStream;\nswap\ninvokevirtual java/io/PrintStream/println(I)V\n", item);
+            }
+            else if(!strcmp(type, "float")){
+                sprintf(out_str, "getstatic compiler_hw3/%s F\ngetstatic java/lang/System/out Ljava/io/PrintStream;\nswap\ninvokevirtual java/io/PrintStream/println(F)V\n", item);
+            }
+            else if(!strcmp(type, "string")){
+                sprintf(out_str, "getstatic compiler_hw3/%s Ljava/lang/String;\ngetstatic java/lang/System/out Ljava/io/PrintStream;\nswap\ninvokevirtual java/io/PrintStream/println(Ljava/lang/String;)V\n", item);
+            }
+        }
 
     }
-    /* print constants */
+    /* print number constants */
     else{
         if(!strcmp(type, "int")){
-            int num;
-            sscanf(item, "%d", &num);
-            sprintf(out_str, "ldc %d\ngetstatic java/lang/System/out Ljava/io/PrintStream;\nswap\ninvokevirtual java/io/PrintStream/println(I)V\n", num);
-            gencode_function(out_str);
+            sprintf(out_str, "ldc %s\ngetstatic java/lang/System/out Ljava/io/PrintStream;\nswap\ninvokevirtual java/io/PrintStream/println(I)V\n", item);
         }
         else if(!strcmp(type, "float")){
-            float num;
-            sscanf(item, "%f", &num);
-            sprintf(out_str, "ldc %.1f\ngetstatic java/lang/System/out Ljava/io/PrintStream;\nswap\ninvokevirtual java/io/PrintStream/println(F)V\n", num);
-            gencode_function(out_str);
-        }
-        else if(!strcmp(type, "string")){
-
-        }
+            sprintf(out_str, "ldc %s\ngetstatic java/lang/System/out Ljava/io/PrintStream;\nswap\ninvokevirtual java/io/PrintStream/println(F)V\n", item);
+       }
     }
-    
+    gencode_function(out_str);
 }

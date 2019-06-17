@@ -6,8 +6,10 @@ string str = "Hello";
 
 int main(){
     int temp = 5;
-    print(1.554884);
-    int temp1 = a + 4;
+    float temp1 = 10;
+    print(temp);
+    print(b);
+    print(str);
 
     return 0;
 }
