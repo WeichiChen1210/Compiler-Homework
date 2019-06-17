@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
 extern int yylineno;
 extern int yylex();
@@ -32,6 +33,11 @@ struct symbols{
     struct symbols *next;
 };
 
+struct id_data{
+    char id[50];
+    char value[100];
+} id_struct;
+
 struct symbols table[200];
 
 void yyerror(char *s);
@@ -45,14 +51,14 @@ void semantic_errors(int kind_of_error, int offset);    // print semantic errors
 void delete_parameter_symbol(int scope);                // delete the parameter of forwarding function
 void fill_parameter(int scope, char *id, char *attribute);  // refill the parameters to forwarding functions
 void free_symbol_table();
+void search_type(char* id, int scope, char* result);
 
 /* generate jasmin code */
+void gencode_function(char* input);
+char* casting(char* value, int type);
 void j_global_var_declaration(char* id, char* value, char* constant_type);
 void j_local_var_declaration(char* id, char* value, char* constant_type);
-char* casting(char* value, int type);
-
-/* code generation functions, just an example! */
-void gencode_function();
+void j_print(char* item, char *type);
 
 %}
 /* Use variable or self-defined structure to represent
@@ -89,7 +95,7 @@ void gencode_function();
 %type <string> postfix_expression primary_expression unary_expression multiplicative_expression
 %type <string> additive_expression relational_expression equality_expression  and_expression inclusive_or_expression exclusive_or_expression
 %type <string> logical_and_expression logical_or_expression conditional_expression assignment_expression
-%type <string> initializer_list 
+%type <string> initializer_list id_stat print_statement statement
 /* Yacc will start at this nonterminal */
 %start translation_unit
 
@@ -191,18 +197,9 @@ direct_declarator
     | direct_declarator LSB conditional_expression RSB
     | direct_declarator LSB RSB
     /* attach parameters together */
-    | direct_declarator LB in_scope parameter_list RB out_scope { strcat($$, ":"); strcat($$, $4); }
-    | direct_declarator LB in_scope identifier_list RB out_scope
+    | direct_declarator LB{ scope_num++; } parameter_list RB { scope_num--; strcat($$, ":"); strcat($$, $4); }
+    | direct_declarator LB{ scope_num++; } identifier_list RB{ scope_num--; }
     | direct_declarator LB RB  
-    ;
-
-/* these 2 states are used to increase and decrease scope level */
-in_scope
-    : { scope_num++; }
-    ;
-
-out_scope
-    : { scope_num--; }
     ;
 
 declaration
@@ -219,13 +216,14 @@ declaration
                                                                     else{
                                                                         /* global variable declaration */
                                                                         if(scope_num == 0){
+                                                                            printf("global variable\n");
                                                                             // printf("global %s %s %s\n", $1, $2, constants);
                                                                             // generate code
                                                                             j_global_var_declaration($2, constants, $1);
                                                                         }
                                                                         else{
-                                                                            printf("local\n");
-
+                                                                            printf("local variable\n");
+                                                                            printf("decl id_struct %s %s %s\n", $1, id_struct.id, id_struct.value);
                                                                         }
                                                                         insert_symbol($2, "variable", $1, scope_num, "NULL", constants);
                                                                         strcpy(constants, "NULL");
@@ -239,23 +237,26 @@ identifier_list
     ;
 
 init_declarator_list
-    : init_declarator                               { $$ = $1; printf("init_decl_list %s\n", $$); }
+    : init_declarator                               {   $$ = $1; 
+                                                        printf("init_decl_list %s\n", $$);
+                                                        printf("id_struct %s %s\n", id_struct.id, id_struct.value); 
+                                                    }
     | init_declarator_list COMMA init_declarator
     ;
 
 /* statements */
 statement
-    : compound_statement
-    | expression_statement
-    | selection_statement
-    | iteration_statement
-    | jump_statement
-    | print_statement
+    : compound_statement    {;}
+    | expression_statement  {;}
+    | selection_statement   {;}
+    | iteration_statement   {;}
+    | jump_statement        {;}
+    | print_statement       {;}
     ;
 
 compound_statement
     : LCB RCB
-    | LCB in_scope block_item_list RCB out_scope
+    | LCB{ scope_num++; } block_item_list RCB{ scope_num--; }
     ;
 
 expression_statement
@@ -282,14 +283,27 @@ jump_statement
     ;
 
 print_statement
-    : PRINT LB id_stat RB SEMICOLON
-    | PRINT LB QUOTA STR_CONST QUOTA RB SEMICOLON
-    | PRINT LB I_CONST RB SEMICOLON
-    | PRINT LB F_CONST RB SEMICOLON
+    : PRINT LB id_stat RB SEMICOLON                 {   char type[10];
+                                                        search_type(strdup($3), scope_num, type);
+                                                        printf("%s %s %d\n", $3, type, scope_num);
+                                                        j_print($3, type);
+                                                    }
+    | PRINT LB QUOTA STR_CONST QUOTA RB SEMICOLON   {   ;
+                                                    }
+    | PRINT LB I_CONST{ strcpy(constants, strdup(yytext));} RB SEMICOLON{
+                                                        printf("print %s %s %d\n", constants, "int", scope_num);
+                                                        j_print(constants, "int");
+                                                        strcpy(constants, "NULL");
+                                                    }
+    | PRINT LB F_CONST{ strcpy(constants, strdup(yytext));} RB SEMICOLON{
+                                                        printf("print %s %s %d\n", constants, "float", scope_num);
+                                                        j_print(constants, "float");
+                                                        strcpy(constants, "NULL");
+                                                    }
     ;
 
 conditional_expression
-    : logical_or_expression { $$ = $1; printf("condi %s\n", $$); }
+    : logical_or_expression { $$ = $1; /*printf("condi %s\n", $$);*/ }
     ;
 
 parameter_list
@@ -299,9 +313,25 @@ parameter_list
     ;
 
 init_declarator
-    : declarator                    { $$ = $1; }
+    : declarator                    {   $$ = $1; printf("init_declarator %s\n", $1);
+                                        strcpy(id_struct.id, $1);
+                                        strcpy(id_struct.value, "NULL");
+                                    }
     | func_declarator               { $$ = $1; }
-    | declarator ASGN initializer   { $$ = $1; printf("init_declarator %s\n", $3); }
+    | declarator ASGN initializer   {   char temp[100];
+                                        strcpy(temp, strdup($3));
+                                        char c = temp[0];
+                                        if(c != '+' && c != '-' && c != '*' && c != '/' && c != '%'){
+                                            $$ = $1; 
+                                            printf("init_declarator %s\n", $3);
+                                            strcpy(id_struct.id, $1);
+                                            strcpy(id_struct.value, $3);
+                                        }
+                                        else{
+                                            printf("add %s\n", $3);
+                                        }
+                                        
+                                    }
     ;
 
 id_stat
@@ -309,11 +339,14 @@ id_stat
                     sem_err_flag = 2;
                     strcpy(error_id, yytext);
                 }
+                else{
+                    $$ = strdup(yytext);
+                }
             }
     ;
 
 logical_or_expression
-    : logical_and_expression    { $$ = $1; printf("logi or %s\n", $$); }
+    : logical_and_expression    { $$ = $1; /*printf("logi or %s\n", $$);*/ }
     | logical_or_expression OR logical_and_expression
     ;
 
@@ -338,12 +371,12 @@ initializer
     ;
 
 logical_and_expression
-    : inclusive_or_expression   { $$ = $1; printf("logic and %s\n", $$); }
+    : inclusive_or_expression   { $$ = $1; /*printf("logic and %s\n", $$);*/ }
     | logical_and_expression AND inclusive_or_expression
     ;
 
 assignment_expression
-    : conditional_expression    { $$ = $1; printf("assign %s\n", $$); }
+    : conditional_expression    { $$ = $1; /*printf("assign %s\n", $$);*/ }
     | unary_expression assignment_operator assignment_expression
     ;
 
@@ -353,7 +386,7 @@ initializer_list
     ;
 
 inclusive_or_expression
-    : exclusive_or_expression   { $$ = $1; printf("incl %s\n", $$); }
+    : exclusive_or_expression   { $$ = $1; /*printf("incl %s\n", $$);*/ }
     ;
 
 unary_expression
@@ -373,12 +406,13 @@ assignment_operator
     ;
 
 exclusive_or_expression
-    : and_expression            { $$ = $1; printf("excl %s\n", $$); }
+    : and_expression            { $$ = $1; /*printf("excl %s\n", $$);*/ }
     ;
 
 postfix_expression
     : primary_expression        {   /* check ID declared or not */
                                     if($1 != NULL) {
+                                        printf("prim %s\n", $1);
                                         char temp[50];
                                         strcpy(temp, $1);
                                         int len = strlen(temp);
@@ -417,7 +451,7 @@ unary_operator
     ;
 
 and_expression
-    : equality_expression       { $$ = $1; printf("and %s\n", $$); }
+    : equality_expression       { $$ = $1; /*printf("and %s\n", $$);*/ }
     ;
 
 primary_expression
@@ -436,7 +470,7 @@ primary_expression
                                 }
     | QUOTA STR_CONST{  printf("%s\n", strdup(yytext)); 
                         sprintf(constants, "%s/", strdup(yytext));                        
-                    } QUOTA     {   
+                    }   QUOTA   {   
                                     $$ = constants;
                                     // printf("%s\n", $$);
                                 }
@@ -455,13 +489,13 @@ argument_expression_list
     ;
 
 equality_expression
-    : relational_expression                             { $$ = $1; printf("equal %s\n", $$); }
+    : relational_expression                             { $$ = $1; /*printf("equal %s\n", $$);*/ }
     | equality_expression EQ relational_expression
     | equality_expression NE relational_expression
     ;
 
 relational_expression
-    : additive_expression                               { $$ = $1; printf("rel %s\n", $$); }
+    : additive_expression                               { $$ = $1; /*printf("rel %s\n", $$);*/ }
     | relational_expression LT additive_expression
     | relational_expression MT additive_expression
     | relational_expression LTE additive_expression
@@ -469,13 +503,21 @@ relational_expression
     ;
 
 additive_expression
-    : multiplicative_expression                         { $$ = $1; printf("add %s\n", $$); }
-    | additive_expression ADD multiplicative_expression
+    : multiplicative_expression                         { $$ = $1; /*printf("add %s\n", $$);*/ }
+    | additive_expression ADD multiplicative_expression {   char item1[50];
+                                                            strcpy(item1, strdup($1));
+                                                            char item2[50];
+                                                            strcpy(item2, strdup($3));
+                                                            char combine[100];
+                                                            sprintf(combine, "+ %s %s", item1, item2);
+                                                            printf("here %s\n", combine);
+                                                            $$ = combine;
+                                                        }
     | additive_expression SUB multiplicative_expression
     ;
 
 multiplicative_expression
-    : unary_expression                                  { $$ = $1; printf("mul %s\n", $$); }
+    : unary_expression                                  { $$ = $1; /*printf("mul %s\n", $$);*/ }
     | multiplicative_expression MUL unary_expression
     | multiplicative_expression DIV unary_expression
     | multiplicative_expression MOD unary_expression
@@ -725,8 +767,33 @@ void fill_parameter(int scope, char *id, char *attribute) {
     }
 }
 
+void search_type(char* id, int scope, char* result){
+    struct symbols *temp;
+
+    while(scope >= 0){
+        temp = &table[scope];
+        if(table[scope].symbol_num == 0){
+            return;
+        }
+        else {
+            while(temp != NULL){
+                /* if this is a variable already existed */
+                if(!strcmp(temp->name, id)){
+                    printf("find type %s\n", temp->type);
+                    strcpy(result, temp->type);
+                    break;
+                }
+                temp = temp->next;
+            }
+        }
+        scope--;
+    }
+}
+
 /* code generation functions */
-void gencode_function() {}
+void gencode_function(char* input) {
+    fputs(input, file);
+}
 
 char* casting(char* value, int type){
     int i;
@@ -758,21 +825,30 @@ char* casting(char* value, int type){
 
 /* generating the variable declaration */
 void j_global_var_declaration(char* id, char *value, char* constant_type){
+    char output[100];
     /* classify with variable type */
     if(!strcmp(constant_type, "int")){
-        if(!strcmp(value, "NULL"))   fprintf(file, ".field public static %s I = 0\n", id);  // not initialized, assign 0
+        if(!strcmp(value, "NULL")){
+            sprintf(output, ".field public static %s I = 0\n", id); // not initialized, assign 0
+            gencode_function(output);      
+        }
         /* check type casting */
         else{
             casting(value, 0);
-            fprintf(file, ".field public static %s I = %s\n", id, value);
+            sprintf(output, ".field public static %s I = %s\n", id, value);
+            gencode_function(output);
         }
     }
     else if(!strcmp(constant_type, "float")){
-        if(!strcmp(value, "NULL"))   fprintf(file, ".field public static %s F = 0.0\n", id);
+        if(!strcmp(value, "NULL")){
+            sprintf(output, ".field public static %s F = 0.0\n", id);
+            gencode_function(output);
+        }
         else{
             /* check type casting */
             casting(value, 1);
-            fprintf(file, ".field public static %s F = %s\n", id, value);
+            sprintf(output, ".field public static %s F = %s\n", id, value);
+            gencode_function(output);
         }
     }
     else if(!strcmp(constant_type, "string")){
@@ -780,15 +856,17 @@ void j_global_var_declaration(char* id, char *value, char* constant_type){
         int len = strlen(value);
         value[len-1] = '\0';    // take out the last '/'
         sprintf(temp, "\"%s\"", value); // add ""
-        fprintf(file, ".field public static %s Ljava/lang/String; = %s\n", id, temp);
+        sprintf(output, ".field public static %s Ljava/lang/String; = %s\n", id, temp);
+        gencode_function(output);
         strcpy(value, temp);
     }
     else if(!strcmp(constant_type, "bool")){        
         if(!strcmp(value, "NULL"))   fprintf(file, ".field public static %s Z = 1\n", id);  // not initialize
         int len = strlen(value);
         value[len-1] = '\0';    // take out the last '/'
-        if(!strcmp(value, "true")) fprintf(file, ".field public static %s Z = 1\n", id);
-        else fprintf(file, ".field public static %s Z = 0\n", id);
+        if(!strcmp(value, "true")) sprintf(output, ".field public static %s Z = 1\n", id);
+        else sprintf(output, ".field public static %s Z = 0\n", id);
+        gencode_function(output);
     }
 }
 
@@ -801,4 +879,33 @@ void j_func_declaration(char* id, char *value, char* return_type){
     if(!strcmp(id, "main")){
 
     }
+}
+
+void j_print(char* item, char *type){
+    char out_str[200];
+    /* print variable */
+    if(!isdigit(item[0])){
+        printf("j_print %c %s\n", item[0], type);
+        printf("print ID\n");
+
+    }
+    /* print constants */
+    else{
+        if(!strcmp(type, "int")){
+            int num;
+            sscanf(item, "%d", &num);
+            sprintf(out_str, "ldc %d\ngetstatic java/lang/System/out Ljava/io/PrintStream;\nswap\ninvokevirtual java/io/PrintStream/println(I)V\n", num);
+            gencode_function(out_str);
+        }
+        else if(!strcmp(type, "float")){
+            float num;
+            sscanf(item, "%f", &num);
+            sprintf(out_str, "ldc %.1f\ngetstatic java/lang/System/out Ljava/io/PrintStream;\nswap\ninvokevirtual java/io/PrintStream/println(F)V\n", num);
+            gencode_function(out_str);
+        }
+        else if(!strcmp(type, "string")){
+
+        }
+    }
+    
 }
