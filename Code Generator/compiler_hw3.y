@@ -67,6 +67,7 @@ char* casting(char* value, int type);
 void j_global_var_declaration(char* id, char* value, char* constant_type);
 void j_local_var_declaration(char* id, char* value, char* constant_type);
 void j_func_declaration(char* id, char* return_type, char* parameters);
+void j_func_call(char* id, char* parameter);
 void j_print(char* item, char *type);
 
 %}
@@ -104,7 +105,7 @@ void j_print(char* item, char *type);
 %type <string> postfix_expression primary_expression unary_expression multiplicative_expression
 %type <string> additive_expression relational_expression equality_expression  and_expression inclusive_or_expression exclusive_or_expression
 %type <string> logical_and_expression logical_or_expression conditional_expression assignment_expression
-%type <string> initializer_list id_stat print_statement statement
+%type <string> initializer_list id_stat print_statement statement argument_expression_list
 /* Yacc will start at this nonterminal */
 %start translation_unit
 
@@ -153,6 +154,8 @@ function_definition
                                                         strcpy(func_struct.type, $1);
                                                         j_func_declaration($2, $1, temp);
                                                         insert_symbol($2, "function", $1, scope_num, temp, "NULL");
+                                                        strcpy(func_struct.id, "");
+                                                        strcpy(func_struct.type, "");
                                                     }    
                                                 } compound_statement {  // printf("%s\n", func_struct.type);
                                                                         if(!strcmp(func_struct.type, "int"))
@@ -381,7 +384,7 @@ logical_or_expression
     ;
 
 expression
-    : assignment_expression
+    : assignment_expression     { printf("here ex\n"); }
     | expression COMMA assignment_expression
     ;
 
@@ -406,8 +409,8 @@ logical_and_expression
     ;
 
 assignment_expression
-    : conditional_expression    { $$ = $1; /*printf("assign %s\n", $$);*/ }
-    | unary_expression assignment_operator assignment_expression
+    : conditional_expression    { $$ = $1; printf("assign %s\n", $$); }
+    | unary_expression assignment_operator assignment_expression    { printf("here ass %s\n", $3); }
     ;
 
 initializer_list
@@ -420,7 +423,7 @@ inclusive_or_expression
     ;
 
 unary_expression
-    : postfix_expression        { $$ = $1; /*printf("unary %s\n", $$);*/ }
+    : postfix_expression        { $$ = $1; printf("unary %s\n", $$); }
     | INC unary_expression      {}
     | DEC unary_expression      {}
     | unary_operator unary_expression   {}
@@ -462,13 +465,18 @@ postfix_expression
     | postfix_expression LSB expression RSB
     | postfix_expression LB RB
     | postfix_expression LB argument_expression_list RB {   /* check function name declared or not */
+                                                            printf("in post\n");
                                                             if($1 != NULL) {
+                                                                printf("$1 %s\n", $1);
                                                                 if(!lookup_symbol($1, scope_num, 3)){
                                                                     // undeclared function
                                                                     sem_err_flag = 3;
                                                                     strcpy(error_id, $1);
                                                                 }
-                                                            }  
+                                                            }
+                                                            if($3 != NULL){
+                                                                printf("post %s\n", $3);
+                                                            }
                                                         }
     | postfix_expression INC
     | postfix_expression DEC
@@ -514,8 +522,15 @@ primary_expression
     ;
 
 argument_expression_list
-    : assignment_expression
-    | argument_expression_list COMMA assignment_expression
+    : assignment_expression {   printf("ass argu %s\n", $1);
+                                $$ = $1;    
+                            }
+    | argument_expression_list COMMA assignment_expression  {   // printf("argu 2 %s %s\n", $1, $3);
+                                                                $$ = $1;
+                                                                strcat($$, "/");
+                                                                strcat($$, strdup($3));
+                                                                printf("argu 2 %s\n", $$);
+                                                            }
     ;
 
 equality_expression
