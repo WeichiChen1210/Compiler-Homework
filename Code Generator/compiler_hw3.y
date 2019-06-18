@@ -14,7 +14,6 @@ int sem_err_flag = -1;
 int syn_err_flag = 0;
 char error_id[50];
 int scope_num = 0;
-int j_infunc = 0;
 
 char constants[50] = "NULL";
 
@@ -35,6 +34,15 @@ struct symbols{
     struct symbols *next;
 };
 
+struct functions{
+    int index;
+    char name[50];
+    char type[50];
+    char attribute[50];
+
+    struct functions *next;
+};
+
 struct id_data{
     char id[50];
     char value[100];
@@ -46,6 +54,7 @@ struct func_data{
 } func_struct;
 
 struct symbols table[20];
+struct functions *func_table;
 
 void yyerror(char *s);
 
@@ -53,6 +62,7 @@ void yyerror(char *s);
 int lookup_symbol(char *id, int scope, int mode);
 void create_symbol();
 void insert_symbol(char *name, char *kind, char *type, int scope, char *attribute, char *value);
+void insert_function(char* name, char* type, char* attribute);
 void dump_symbol(int scope);
 void semantic_errors(int kind_of_error, int offset);    // print semantic errors messages
 void delete_parameter_symbol(int scope);                // delete the parameter of forwarding function
@@ -154,16 +164,17 @@ function_definition
                                                         strcpy(func_struct.type, $1);
                                                         j_func_declaration($2, $1, temp);
                                                         insert_symbol($2, "function", $1, scope_num, temp, "NULL");
-                                                        strcpy(func_struct.id, "");
-                                                        strcpy(func_struct.type, "");
+                                                        insert_function($2, $1, temp);
                                                     }    
-                                                } compound_statement {  // printf("%s\n", func_struct.type);
+                                                } compound_statement {  printf("%s\n", func_struct.type);
                                                                         if(!strcmp(func_struct.type, "int"))
                                                                             fprintf(file, "\tireturn\n.end method\n");
                                                                         else if(!strcmp(func_struct.type, "float"))
                                                                             fprintf(file, "\tfreturn\n.end method\n");
                                                                         else if(!strcmp(func_struct.type, "void"))
                                                                             fprintf(file, "\treturn\n.end method\n");
+                                                                        strcpy(func_struct.id, "");
+                                                                        strcpy(func_struct.type, "");
                                                                     }
     | declarator declaration_list compound_statement
     | declarator compound_statement
@@ -180,7 +191,10 @@ function_definition
                                                             strcpy(error_id, $2);
                                                         }
                                                         /* false, insert */
-                                                        else insert_symbol($2, "function", $1, scope_num, notdef, "NULL");
+                                                        else{
+                                                            insert_symbol($2, "function", $1, scope_num, notdef, "NULL");
+                                                            insert_function($2, $1, "NULL");
+                                                        }
                                                         /* delete the symbols of the forwarding function */
                                                         delete_parameter_symbol(scope_num+1);
                                                     }
@@ -384,7 +398,7 @@ logical_or_expression
     ;
 
 expression
-    : assignment_expression     { printf("here ex\n"); }
+    : assignment_expression     { ; }
     | expression COMMA assignment_expression
     ;
 
@@ -410,7 +424,7 @@ logical_and_expression
 
 assignment_expression
     : conditional_expression    { $$ = $1; printf("assign %s\n", $$); }
-    | unary_expression assignment_operator assignment_expression    { printf("here ass %s\n", $3); }
+    | unary_expression assignment_operator assignment_expression    { ; }
     ;
 
 initializer_list
@@ -423,7 +437,7 @@ inclusive_or_expression
     ;
 
 unary_expression
-    : postfix_expression        { $$ = $1; printf("unary %s\n", $$); }
+    : postfix_expression        { $$ = $1; /*printf("unary %s\n", $$);*/ }
     | INC unary_expression      {}
     | DEC unary_expression      {}
     | unary_operator unary_expression   {}
@@ -465,9 +479,7 @@ postfix_expression
     | postfix_expression LSB expression RSB
     | postfix_expression LB RB
     | postfix_expression LB argument_expression_list RB {   /* check function name declared or not */
-                                                            printf("in post\n");
                                                             if($1 != NULL) {
-                                                                printf("$1 %s\n", $1);
                                                                 if(!lookup_symbol($1, scope_num, 3)){
                                                                     // undeclared function
                                                                     sem_err_flag = 3;
@@ -475,7 +487,8 @@ postfix_expression
                                                                 }
                                                             }
                                                             if($3 != NULL){
-                                                                printf("post %s\n", $3);
+                                                                // printf("post %s\n", $3);
+                                                                j_func_call(strdup($1), strdup($3));
                                                             }
                                                         }
     | postfix_expression INC
@@ -522,14 +535,14 @@ primary_expression
     ;
 
 argument_expression_list
-    : assignment_expression {   printf("ass argu %s\n", $1);
+    : assignment_expression {   // printf("ass argu %s\n", $1);
                                 $$ = $1;    
                             }
     | argument_expression_list COMMA assignment_expression  {   // printf("argu 2 %s %s\n", $1, $3);
                                                                 $$ = $1;
-                                                                strcat($$, "/");
+                                                                strcat($$, ":");
                                                                 strcat($$, strdup($3));
-                                                                printf("argu 2 %s\n", $$);
+                                                                // printf("argu 2 %s\n", $$);
                                                             }
     ;
 
@@ -589,7 +602,6 @@ int main(int argc, char** argv)
     file = fopen("compiler_hw3.j","w");
     fprintf(file,   ".class public compiler_hw3\n"
                     ".super java/lang/Object\n");
-    //                ".method public static main([Ljava/lang/String;)V\n");
     
     create_symbol();
     yyparse();
@@ -631,6 +643,13 @@ void create_symbol() {
         table[i].symbol_num = 0;
         table[i].defined = -1;
     }
+    func_table = (struct functions *)malloc(sizeof(struct functions));
+    strcpy(func_table->name, "HEAD");
+    strcpy(func_table->type, "NULL");
+    strcpy(func_table->attribute, "NULL");
+    func_table->index = -1;
+    func_table->next = NULL;
+
 }
 
 /* insert symbols */
@@ -672,6 +691,39 @@ void insert_symbol(char *name, char *kind, char *type, int scope, char *attribut
     temp->next = new_symbol;
     table[scope].symbol_num++;
 
+}
+
+/* insert new function to function table */
+void insert_function(char* name, char* type, char* attribute){
+    struct functions *temp, *new_function;
+
+    temp = func_table;
+    while(temp->next != NULL)
+        temp = temp->next;
+    
+    new_function = (struct functions *)malloc(sizeof(struct functions));
+    strcpy(new_function->name, name);
+
+    if(!strcmp(type, "int"))    strcpy(new_function->type, "I");
+    else if(!strcmp(type, "float")) strcpy(new_function->type, "F");
+    else if(!strcmp(type, "void"))  strcpy(new_function->type, "V");
+    
+    if(attribute == NULL) strcpy(new_function->attribute, "[Ljava/lang/String;");
+    else {
+        analyze_parameters(attribute);
+        strcpy(new_function->attribute, attribute);
+    }
+
+    new_function->index = temp->index + 1;
+    new_function->next = NULL;
+    temp->next = new_function;
+
+    // struct functions *temp1;
+    // temp1 = func_table;
+    // while(temp1 != NULL){
+    //     printf("%d %s %s %s\n", temp1->index, temp1->name, temp1->type, temp1->attribute);
+    //     temp1 = temp1->next;
+    // }
 }
 
 /* lookup symbols from scope up to 0 */
@@ -718,6 +770,20 @@ int lookup_symbol(char *id, int scope, int mode) {  // mode 0: redeclared variab
     }
     // return 0: not exist 1: exist 2: forwarding
     return existed;
+}
+
+/* lookup function table to get the id's type and attribute */
+void lookup_function(char* id, char* type, char* attribute){
+    struct functions *temp;
+    temp = func_table;
+    while(temp != NULL){
+        if(!strcmp(temp->name, id)){
+            strcpy(type, temp->type);
+            strcpy(attribute, temp->attribute);
+            break;
+        }
+        temp = temp->next;
+    }
 }
 
 /* dump symbols */
@@ -836,7 +902,7 @@ void search_type(char* id, int scope, char* result){
 }
 
 /* lookup symbol table to find the index of the variable */
-int search_index(char* id, int scope){
+int search_index(char* id, int scope){  // return > 0: local; == -1, global
     struct symbols *temp;
     int found = 0, index;
 
@@ -862,6 +928,7 @@ int search_index(char* id, int scope){
     return index;
 }
 
+/* analyze the types of parameters */
 void analyze_parameters(char* attribute){
     char temp[50];
     strcpy(temp, attribute);
@@ -990,7 +1057,60 @@ void j_func_declaration(char* id, char* return_type, char* parameters){
     sprintf(out_str, ".method public static %s(%s)%s\n.limit stack 50\n.limit locals 50\n", id, para_type, ret_type);
     // printf("%s\n", out_str);
     gencode_function(out_str);
-    j_infunc = 1;
+}
+
+void j_func_call(char* id, char* parameter){
+    char out_str[300];
+    strcpy(out_str, "");
+    // printf("in func %s %s\n", id, parameter);
+    /* analyze the parameters */
+    char temp[50];
+    strcpy(temp, parameter);
+    char *delim = ":";
+    char *name;
+    name = strtok(temp, delim);
+    char tmp_str[150];
+    while(name != NULL){
+        // printf("name %s\n", name);
+        /* constants */
+        if(isdigit(name[0])){
+            sprintf(tmp_str, "\tldc %s\n", name);
+        }
+        /* variable */
+        else{
+            // printf("variable %d\n", scope_num);
+            /* local */
+            int index = search_index(name, scope_num);
+            char type[10];
+            search_type(name, scope_num, type);
+            if(index >= 0){
+                if(!strcmp(type, "int")){   // int
+                    sprintf(tmp_str, "\tiload %d\n", index);
+                }
+                else if(!strcmp(type, "float")){    // float
+                    sprintf(tmp_str, "\tfload %d\n", index);
+                }
+            }
+            /* global */
+            else{
+                if(!strcmp(type, "int")){   // int
+                    sprintf(tmp_str, "\tgetstatic compiler_hw3/%s I\n", name);
+                }
+                else if(!strcmp(type, "float")){    // float
+                    sprintf(tmp_str, "\tgetstatic compiler_hw3/%s F\n", name);
+                }
+            }
+        }
+        strcat(out_str, tmp_str);
+        name = strtok(NULL, delim);
+    }
+    /* get attribute and return type */
+    char attribute[10];
+    char ret_type[10];
+    lookup_function(id, ret_type, attribute);
+    sprintf(tmp_str, "\tinvokestatic compiler_hw3/%s(%s)%s\n", id, attribute, ret_type);
+    strcat(out_str, tmp_str);
+    gencode_function(out_str);
 }
 
 /* generating the print statement */
@@ -1040,4 +1160,18 @@ void j_print(char* item, char *type){
        }
     }
     gencode_function(out_str);
+}
+
+int is_float(char* num){
+    int result = 0;
+    char temp[20];
+    strcpy(temp, num);
+    int i;
+    for(i = 0; i < strlen(temp); i++){
+        if(temp[i] == '.'){
+            result = 1;
+            break;
+        }
+    }
+    return result;
 }
