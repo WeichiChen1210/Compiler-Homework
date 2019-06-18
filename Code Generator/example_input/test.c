@@ -4,9 +4,10 @@ int c;
 bool d = true;
 string str = "Hello";
 
-int main(){
+int main(int arg1, float arg2){
     int temp = 5;
-    float temp1 = 10;
+    int e = temp;
+    int temp1 = 10 + temp;
     print(temp);
     print(b);
     print(str);

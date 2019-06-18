@@ -14,6 +14,7 @@ int sem_err_flag = -1;
 int syn_err_flag = 0;
 char error_id[50];
 int scope_num = 0;
+int j_infunc = 0;
 
 char constants[50] = "NULL";
 
@@ -39,7 +40,12 @@ struct id_data{
     char value[100];
 } id_struct;
 
-struct symbols table[200];
+struct func_data{
+    char id[50];
+    char type[10];
+} func_struct;
+
+struct symbols table[20];
 
 void yyerror(char *s);
 
@@ -54,11 +60,13 @@ void fill_parameter(int scope, char *id, char *attribute);  // refill the parame
 void free_symbol_table();
 void search_type(char* id, int scope, char* result);
 int search_index(char* id, int scope);
+void analyze_parameters(char* attribute);
 /* generate jasmin code */
 void gencode_function(char* input);
 char* casting(char* value, int type);
 void j_global_var_declaration(char* id, char* value, char* constant_type);
 void j_local_var_declaration(char* id, char* value, char* constant_type);
+void j_func_declaration(char* id, char* return_type, char* parameters);
 void j_print(char* item, char *type);
 
 %}
@@ -115,35 +123,45 @@ external_declaration
 function_definition
     : declaration_specifiers declarator declaration_list compound_statement
     /* normal function declaration and definition */
-    | declaration_specifiers func_declarator compound_statement  {   /* split the string that contains ID and parameter list */
-                                                                char *temp; 
-                                                                temp = strtok($2, ":");
-                                                                /* ID */
-                                                                $2 = temp;
-                                                                printf("%s\n", $2);
-                                                                /* parameters */
-                                                                temp = strtok(NULL, ":");
-                                                                /* lookup */
-                                                                int result = lookup_symbol($2, scope_num, 1);
-                                                                /* if return 2, it is a forwarding function(encountered at the 2nd time) */
-                                                                if(result == 2){
-                                                                    /* refill the attribute with the ID and parameter list */
-                                                                    fill_parameter(scope_num, $2, temp);
-                                                                }
-                                                                /* if return 1, redeclared function*/
-                                                                else if(result){
-                                                                    // redeclared function
-                                                                    /* set semantic error flag and lex will call the semantic function */
-                                                                    sem_err_flag = 1;
-                                                                    /* save the ID to use in semantic function */
-                                                                    strcpy(error_id, $2);
-                                                                }
-                                                                /* return 0, new function, insert the symbol */
-                                                                else {
-                                                                    
-                                                                    insert_symbol($2, "function", $1, scope_num, temp, "NULL");
-                                                                }    
-                                                            }
+    | declaration_specifiers func_declarator    {   /* split the string that contains ID and parameter list */
+                                                    char *temp; 
+                                                    temp = strtok($2, ":");
+                                                    /* ID */
+                                                    $2 = temp;
+                                                    printf("%s\n", $2);
+                                                    /* parameters */
+                                                    temp = strtok(NULL, ":");
+                                                    /* lookup */
+                                                    int result = lookup_symbol($2, scope_num, 1);
+                                                    /* if return 2, it is a forwarding function(encountered at the 2nd time) */
+                                                    if(result == 2){
+                                                        /* refill the attribute with the ID and parameter list */
+                                                        fill_parameter(scope_num, $2, temp);
+                                                    }
+                                                    /* if return 1, redeclared function*/
+                                                    else if(result){
+                                                        // redeclared function
+                                                        /* set semantic error flag and lex will call the semantic function */
+                                                        sem_err_flag = 1;
+                                                        /* save the ID to use in semantic function */
+                                                        strcpy(error_id, $2);
+                                                    }
+                                                    /* return 0, new function, insert the symbol */
+                                                    else {
+                                                        printf("func decl %s %s %s\n", $1, $2, temp);
+                                                        strcpy(func_struct.id, $2);
+                                                        strcpy(func_struct.type, $1);
+                                                        j_func_declaration($2, $1, temp);
+                                                        insert_symbol($2, "function", $1, scope_num, temp, "NULL");
+                                                    }    
+                                                } compound_statement {  // printf("%s\n", func_struct.type);
+                                                                        if(!strcmp(func_struct.type, "int"))
+                                                                            fprintf(file, "\tireturn\n.end method\n");
+                                                                        else if(!strcmp(func_struct.type, "float"))
+                                                                            fprintf(file, "\tfreturn\n.end method\n");
+                                                                        else if(!strcmp(func_struct.type, "void"))
+                                                                            fprintf(file, "\treturn\n.end method\n");
+                                                                    }
     | declarator declaration_list compound_statement
     | declarator compound_statement
     | declaration_specifiers func_declarator SEMICOLON   {   /* forwarding function(encountered at the first time) */
@@ -218,13 +236,15 @@ declaration
                                                                         /* global variable declaration */
                                                                         if(scope_num == 0){
                                                                             printf("global variable\n");
-                                                                            // printf("global %s %s %s\n", $1, $2, constants);
                                                                             // generate code
                                                                             j_global_var_declaration($2, constants, $1);
                                                                         }
+                                                                        /* local variable declaration */
                                                                         else{
                                                                             printf("local variable\n");
                                                                             printf("decl id_struct %s %s %s\n", $1, id_struct.id, id_struct.value);
+                                                                            
+                                                                            j_local_var_declaration($2, id_struct.value, $1);
                                                                         }
                                                                         insert_symbol($2, "variable", $1, scope_num, "NULL", constants);
                                                                         strcpy(constants, "NULL");
@@ -329,6 +349,7 @@ init_declarator
     | declarator ASGN initializer   {   char temp[100];
                                         strcpy(temp, strdup($3));
                                         char c = temp[0];
+                                        // asign to one item
                                         if(c != '+' && c != '-' && c != '*' && c != '/' && c != '%'){
                                             $$ = $1; 
                                             printf("init_declarator %s\n", $3);
@@ -337,6 +358,7 @@ init_declarator
                                         }
                                         else{
                                             printf("add %s\n", $3);
+                                            $$ = $3;
                                         }
                                         
                                     }
@@ -562,9 +584,6 @@ int main(int argc, char** argv)
         printf("\nTotal lines: %d \n",yylineno);
     }
 
-    fprintf(file, "\treturn\n"
-                  ".end method\n");
-
     fclose(file);
 
     return 0;
@@ -589,7 +608,7 @@ void yyerror(char *s)
 /* initialize the table */
 void create_symbol() {
     int i;
-    for(i = 0; i < 200; i++){
+    for(i = 0; i < 20; i++){
         strcpy(table[i].name, "HEAD");
         table[i].next = NULL;
         table[i].scope = 0;
@@ -828,6 +847,29 @@ int search_index(char* id, int scope){
     return index;
 }
 
+void analyze_parameters(char* attribute){
+    char temp[50];
+    strcpy(temp, attribute);
+    strcpy(attribute, "");
+    char *delim = " ";
+    char *pch;
+    pch = strtok(temp, delim);
+    while(pch != NULL){
+        printf("%s\n", pch);
+        if(!strcmp(pch, "int") || !strcmp(pch, "int,")){
+            strcat(attribute, "I");
+        }
+        else if(!strcmp(pch, "float") || !strcmp(pch, "float,")){
+            strcat(attribute, "F");
+        }
+        else if(!strcmp(pch, "string") || !strcmp(pch, "string,")){
+            strcat(attribute, "Ljava/lang/String;");
+        }
+        pch = strtok(NULL, delim);
+    }
+    printf("after %s\n", attribute);
+}
+
 /* code generation functions */
 void gencode_function(char* input) {
     fputs(input, file);
@@ -911,14 +953,29 @@ void j_global_var_declaration(char* id, char *value, char* constant_type){
 
 
 void j_local_var_declaration(char* id, char *value, char* constant_type){
-
+    printf("local %s %s %s\n", constant_type, id, value);
     return;
 }
 
-void j_func_declaration(char* id, char *value, char* return_type){
-    if(!strcmp(id, "main")){
-
+void j_func_declaration(char* id, char* return_type, char* parameters){
+    char out_str[200];
+    char para_type[50];
+    char ret_type[10];
+    /* parameters */
+    if(parameters != NULL){
+        strcpy(para_type, parameters);        
+        analyze_parameters(para_type);
     }
+    else    strcpy(para_type, "[Ljava/lang/String;");
+    /* return type */
+    if(!strcmp(return_type, "int")) strcpy(ret_type, "I");
+    else if(!strcmp(return_type, "float"))  strcpy(ret_type, "F");
+    else if(!strcmp(return_type, "void"))   strcpy(ret_type, "V");
+
+    sprintf(out_str, ".method public static %s(%s)%s\n.limit stack 50\n.limit locals 50\n", id, para_type, ret_type);
+    // printf("%s\n", out_str);
+    gencode_function(out_str);
+    j_infunc = 1;
 }
 
 /* generating the print statement */
@@ -935,25 +992,25 @@ void j_print(char* item, char *type){
         // printf("index %d\n", index);
         if(index >= 0){    // local
             if(!strcmp(type, "int")){
-                sprintf(out_str, "iload %d\ngetstatic java/lang/System/out Ljava/io/PrintStream;\nswap\ninvokevirtual java/io/PrintStream/println(I)V\n", index);
+                sprintf(out_str, "\tiload %d\n\tgetstatic java/lang/System/out Ljava/io/PrintStream;\n\tswap\n\tinvokevirtual java/io/PrintStream/println(I)V\n", index);
             }
             else if(!strcmp(type, "float")){
-                sprintf(out_str, "fload %d\ngetstatic java/lang/System/out Ljava/io/PrintStream;\nswap\ninvokevirtual java/io/PrintStream/println(F)V\n", index);
+                sprintf(out_str, "\tfload %d\n\tgetstatic java/lang/System/out Ljava/io/PrintStream;\n\tswap\n\tinvokevirtual java/io/PrintStream/println(F)V\n", index);
             }
-            // else if(!strcmp(type, "string")){
-            //     sprintf(out_str, "???load %s\ngetstatic java/lang/System/out Ljava/io/PrintStream;\nswap\ninvokevirtual java/io/PrintStream/println(Ljava/lang/String;)V\n", index);
-            //     gencode_function(out_str);
-            // }
+            else if(!strcmp(type, "string")){
+                sprintf(out_str, "\taload %d\n\tgetstatic java/lang/System/out Ljava/io/PrintStream;\n\tswap\n\tinvokevirtual java/io/PrintStream/println(Ljava/lang/String;)V\n", index);
+                gencode_function(out_str);
+            }
         }
         else{       // global
             if(!strcmp(type, "int")){
-                sprintf(out_str, "getstatic compiler_hw3/%s I\ngetstatic java/lang/System/out Ljava/io/PrintStream;\nswap\ninvokevirtual java/io/PrintStream/println(I)V\n", item);
+                sprintf(out_str, "\tgetstatic compiler_hw3/%s I\n\tgetstatic java/lang/System/out Ljava/io/PrintStream;\n\tswap\n\tinvokevirtual java/io/PrintStream/println(I)V\n", item);
             }
             else if(!strcmp(type, "float")){
-                sprintf(out_str, "getstatic compiler_hw3/%s F\ngetstatic java/lang/System/out Ljava/io/PrintStream;\nswap\ninvokevirtual java/io/PrintStream/println(F)V\n", item);
+                sprintf(out_str, "\tgetstatic compiler_hw3/%s F\n\tgetstatic java/lang/System/out Ljava/io/PrintStream;\n\tswap\n\tinvokevirtual java/io/PrintStream/println(F)V\n", item);
             }
             else if(!strcmp(type, "string")){
-                sprintf(out_str, "getstatic compiler_hw3/%s Ljava/lang/String;\ngetstatic java/lang/System/out Ljava/io/PrintStream;\nswap\ninvokevirtual java/io/PrintStream/println(Ljava/lang/String;)V\n", item);
+                sprintf(out_str, "\tgetstatic compiler_hw3/%s Ljava/lang/String;\n\tgetstatic java/lang/System/out Ljava/io/PrintStream;\n\tswap\n\tinvokevirtual java/io/PrintStream/println(Ljava/lang/String;)V\n", item);
             }
         }
 
@@ -961,10 +1018,10 @@ void j_print(char* item, char *type){
     /* print number constants */
     else{
         if(!strcmp(type, "int")){
-            sprintf(out_str, "ldc %s\ngetstatic java/lang/System/out Ljava/io/PrintStream;\nswap\ninvokevirtual java/io/PrintStream/println(I)V\n", item);
+            sprintf(out_str, "\tldc %s\n\tgetstatic java/lang/System/out Ljava/io/PrintStream;\n\tswap\n\tinvokevirtual java/io/PrintStream/println(I)V\n", item);
         }
         else if(!strcmp(type, "float")){
-            sprintf(out_str, "ldc %s\ngetstatic java/lang/System/out Ljava/io/PrintStream;\nswap\ninvokevirtual java/io/PrintStream/println(F)V\n", item);
+            sprintf(out_str, "\tldc %s\n\tgetstatic java/lang/System/out Ljava/io/PrintStream;\n\tswap\n\tinvokevirtual java/io/PrintStream/println(F)V\n", item);
        }
     }
     gencode_function(out_str);
