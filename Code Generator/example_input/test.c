@@ -8,9 +8,9 @@ int foo(int a, int b) {
    return a;
 }
 
-int main(int arg1, int arg2){
+int main(float arg1, float arg2){
     int temp = 5;
-    int e = arg1 * 10;
+    int e = 10 + a * arg1;
     int temp1 = arg2;
     print(e);
     print(str);
@@ -18,3 +18,12 @@ int main(int arg1, int arg2){
 
     return 0;
 }
+
+// iload 1
+// fload 0
+// swap
+// i2f
+// mul
+// ldc 10
+// i2f
+// fadd

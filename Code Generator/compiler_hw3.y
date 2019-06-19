@@ -74,6 +74,7 @@ void analyze_parameters(char* attribute);
 /* generate jasmin code */
 void gencode_function(char* input);
 char* casting(char* value, int type);
+void j_post_expr(char* id, char* operation);
 void j_global_var_declaration(char* id, char* value, char* constant_type);
 void j_local_var_declaration(char* id, char* value, char* constant_type);
 void j_func_declaration(char* id, char* return_type, char* parameters);
@@ -228,7 +229,7 @@ func_declarator
     ;
 
 direct_declarator
-    : ID                { $$ = strdup(yytext); }
+    : ID                { $$ = strdup(yytext); printf("dir %s\n", yytext); }
     | LB declarator RB  { ; }
     | direct_declarator LSB conditional_expression RSB
     | direct_declarator LSB RSB
@@ -259,7 +260,7 @@ declaration
                                                                         /* local variable declaration */
                                                                         else{
                                                                             printf("local variable\n");
-                                                                            printf("decl id_struct %s %s %s\n", $1, id_struct.id, id_struct.value);
+                                                                            //printf("decl id_struct %s %s %s\n", $1, id_struct.id, id_struct.value);
                                                                             
                                                                             j_local_var_declaration($2, id_struct.value, $1);
                                                                         }
@@ -276,7 +277,7 @@ identifier_list
 
 init_declarator_list
     : init_declarator                               {   $$ = $1; 
-                                                        printf("init_decl_list %s\n", $$);
+                                                        // printf("init_decl_list %s\n", $$);
                                                         printf("id_struct %s %s\n", id_struct.id, id_struct.value); 
                                                     }
     | init_declarator_list COMMA init_declarator
@@ -358,7 +359,8 @@ parameter_list
     ;
 
 init_declarator
-    : declarator                    {   $$ = $1; printf("init_declarator %s\n", $1);
+    : declarator                    {   $$ = $1; 
+                                        // printf("init_declarator %s\n", $1);
                                         strcpy(id_struct.id, $1);
                                         strcpy(id_struct.value, "NULL");
                                     }
@@ -369,7 +371,7 @@ init_declarator
                                         // asign to one item
                                         if(c != '+' && c != '-' && c != '*' && c != '/' && c != '%'){
                                             $$ = $1; 
-                                            printf("init_declarator %s\n", $3);
+                                            // printf("init_declarator %s\n", $3);
                                             strcpy(id_struct.id, $1);
                                             strcpy(id_struct.value, $3);
                                         }
@@ -412,7 +414,7 @@ parameter_declaration
     ;
 
 initializer
-    : assignment_expression             { $$ = $1; printf("initializer %s\n", $$); }
+    : assignment_expression             { $$ = $1; /*printf("initializer %s\n", $$);*/ }
     | LCB initializer_list RCB          {;}
     | LCB initializer_list COMMA RCB    {;}
     ;
@@ -423,7 +425,7 @@ logical_and_expression
     ;
 
 assignment_expression
-    : conditional_expression    { $$ = $1; printf("assign %s\n", $$); }
+    : conditional_expression    { $$ = $1; /*printf("assign %s\n", $$);*/ }
     | unary_expression assignment_operator assignment_expression    { ; }
     ;
 
@@ -459,7 +461,7 @@ exclusive_or_expression
 postfix_expression
     : primary_expression        {   /* check ID declared or not */
                                     if($1 != NULL) {
-                                        printf("prim %s\n", $1);
+                                        printf("post %s\n", $1);
                                         char temp[50];
                                         strcpy(temp, $1);
                                         int len = strlen(temp);
@@ -473,8 +475,9 @@ postfix_expression
                                             // undeclared variable
                                             sem_err_flag = 2;
                                             strcpy(error_id, $1);
+
                                         }
-                                    }                               
+                                    }else { printf("NULL\n"); }                        
                                 }
     | postfix_expression LSB expression RSB
     | postfix_expression LB RB
@@ -506,20 +509,20 @@ and_expression
     ;
 
 primary_expression
-    : ID                        { $$ = strdup(yytext); }
+    : ID                        { $$ = strdup(yytext); printf("primary %s\n", yytext); }
     | I_CONST                   {   strcpy(constants, strdup(yytext));
-                                    printf("%s\n", constants);
+                                    //printf("%s\n", constants);
                                     char temp[50];
                                     sprintf(temp, "%s/", strdup(yytext));
                                     $$ = temp;
                                 }
     | F_CONST                   {   strcpy(constants, strdup(yytext));
-                                    printf("%s\n", constants);
+                                    //printf("%s\n", constants);
                                     char temp[50];
                                     sprintf(temp, "%s/", strdup(yytext));
                                     $$ = temp;
                                 }
-    | QUOTA STR_CONST{  printf("%s\n", strdup(yytext)); 
+    | QUOTA STR_CONST{  // printf("%s\n", strdup(yytext)); 
                         sprintf(constants, "%s/", strdup(yytext));                        
                     }   QUOTA   {   
                                     $$ = constants;
@@ -562,23 +565,20 @@ relational_expression
 
 additive_expression
     : multiplicative_expression                         { $$ = $1; /*printf("add %s\n", $$);*/ }
-    | additive_expression ADD multiplicative_expression {   char item1[50];
-                                                            strcpy(item1, strdup($1));
-                                                            char item2[50];
-                                                            strcpy(item2, strdup($3));
-                                                            char combine[100];
-                                                            sprintf(combine, "+ %s %s", item1, item2);
-                                                            printf("here %s\n", combine);
-                                                            $$ = combine;
+    | additive_expression ADD multiplicative_expression {   
                                                         }
-    | additive_expression SUB multiplicative_expression
+    | additive_expression SUB multiplicative_expression {   
+                                                        }
     ;
 
 multiplicative_expression
     : unary_expression                                  { $$ = $1; /*printf("mul %s\n", $$);*/ }
-    | multiplicative_expression MUL unary_expression
-    | multiplicative_expression DIV unary_expression
-    | multiplicative_expression MOD unary_expression
+    | multiplicative_expression MUL unary_expression    {   
+                                                        }
+    | multiplicative_expression DIV unary_expression    {
+                                                        }
+    | multiplicative_expression MOD unary_expression    {   
+                                                        }
     ;
 
 /* actions can be taken when meet the token or rule */
@@ -937,7 +937,7 @@ void analyze_parameters(char* attribute){
     char *pch;
     pch = strtok(temp, delim);
     while(pch != NULL){
-        printf("%s\n", pch);
+        // printf("%s\n", pch);
         if(!strcmp(pch, "int") || !strcmp(pch, "int,")){
             strcat(attribute, "I");
         }
@@ -949,7 +949,7 @@ void analyze_parameters(char* attribute){
         }
         pch = strtok(NULL, delim);
     }
-    printf("after %s\n", attribute);
+    // printf("after %s\n", attribute);
 }
 
 /* code generation functions */
@@ -984,6 +984,10 @@ char* casting(char* value, int type){
     }
     return value;
     
+}
+
+void j_post_expr(char* id, char* operation){
+    printf("post expr %s %s\n", id, operation);
 }
 
 /* generating the variable declaration */
