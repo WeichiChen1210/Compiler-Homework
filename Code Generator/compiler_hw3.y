@@ -293,7 +293,8 @@ declaration
                                                                         strcpy(constants, "NULL");
                                                                     }
                                                                 }
-    | id_stat ASGN assignment_expression SEMICOLON  {   // printf("here %s %s %d\n", $1, $3, isfunc);
+    | id_stat ASGN assignment_expression SEMICOLON  {   //printf("here %s %s %d\n", $1, $3, isfunc);
+                                                        // printf("%s\n", id_struct.id);
                                                         char type[20];
                                                         char out_str[200];
                                                         search_type($1, scope_num, type);
@@ -361,7 +362,7 @@ compound_statement
     ;
 
 expression_statement
-    : COMMA
+    : COMMA {}
     | expression SEMICOLON  { $$ = $1; /*printf("expr stmt %s %s\n", $1, left_var);*/ }
     ;
 
@@ -714,7 +715,7 @@ primary_expression
                                     }
                                     $$ = temp;
                                 }
-    | LB expression RB          
+    | LB expression RB  {}   
     ;
 
 argument_expression_list
@@ -1080,12 +1081,36 @@ void dump_symbol(int scope) {
 
         printf("%-10d%-10s%-12s", index++, temp->name, temp->kind);
         if(!strcmp(temp->type, "I"))    printf("%-10s", "int");
-        if(!strcmp(temp->type, "F"))    printf("%-10s", "float");
-        if(!strcmp(temp->type, "V"))    printf("%-10s", "void");
-        if(!strcmp(temp->type, "S"))    printf("%-10s", "string");
-        if(!strcmp(temp->type, "B"))    printf("%-10s", "bool");
+        else if(!strcmp(temp->type, "F"))    printf("%-10s", "float");
+        else if(!strcmp(temp->type, "V"))    printf("%-10s", "void");
+        else if(!strcmp(temp->type, "S"))    printf("%-10s", "string");
+        else if(!strcmp(temp->type, "B"))    printf("%-10s", "bool");
         printf("%-10d", temp->scope);
-        if(strcmp(temp->attribute, "\0"))    printf("%s\n", temp->attribute);
+        if(strcmp(temp->attribute, "\0")){
+            char str[20];
+            strcpy(str, temp->attribute);
+            if(!strcmp(str, "[Ljava/lang/String;")) {}
+            else {
+                // printf("c %s", str);
+                int i = 0;
+                while(i < strlen(str)){
+                    if(str[i] == 'I')    printf("%s", "int");
+                    else if(str[i] == 'F')    printf("%s", "float");
+                    else if(str[i] == 'V')    printf("%s", "void");
+                    else if(str[i] == 'S')    printf("%s", "string");
+                    else if(str[i] == 'B')    printf("%s", "bool");
+                    i++;
+                    if(i < strlen(str))  printf(", ");
+                }
+                printf("\n");
+            }
+            // if(!strcmp(temp->type, "I"))    printf("%s\n", "int");
+            // else if(!strcmp(temp->type, "F"))    printf("%s\n", "float");
+            // else if(!strcmp(temp->type, "V"))    printf("%s\n", "void");
+            // else if(!strcmp(temp->type, "S"))    printf("%s\n", "string");
+            // else if(!strcmp(temp->type, "B"))    printf("%s\n", "bool");
+            // printf("%s\n", temp->attribute);
+        }
         else printf("\n");
         /* after printed, delete and free */
         table[scope].next = temp->next;
@@ -1299,7 +1324,7 @@ int j_load_var(char* id){
         if(type >= 0) break;
         scope--;
     }
-    printf("%d\n", type);
+    // printf("%d\n", type);
     switch(type){
         case 0:
             if(scope == 0)  sprintf(out_str, "\tgetstatic compiler_hw3/%s I\n", id);
@@ -1553,49 +1578,6 @@ void j_func_declaration(char* id, char* return_type, char* parameters){
 
 void j_func_call(char* id){
     char out_str[300];
-    // strcpy(out_str, "");
-    // printf("in func %s %s\n", id, parameter);
-    /* analyze the parameters */
-    // char temp[50];
-    // strcpy(temp, parameter);
-    // char *delim = ":";
-    // char *name;
-    // name = strtok(temp, delim);
-    // char tmp_str[150];
-    // while(name != NULL){
-    //     // printf("name %s\n", name);
-    //     /* constants */
-    //     if(isdigit(name[0])){
-    //         sprintf(tmp_str, "\tldc %s\n", name);
-    //     }
-    //     /* variable */
-    //     else{
-    //         // printf("variable %d\n", scope_num);
-    //         /* local */
-    //         int index = search_index(name, scope_num);
-    //         char type[10];
-    //         search_type(name, scope_num, type);
-    //         if(index >= 0){
-    //             if(!strcmp(type, "int")){   // int
-    //                 sprintf(tmp_str, "\tiload %d\n", index);
-    //             }
-    //             else if(!strcmp(type, "float")){    // float
-    //                 sprintf(tmp_str, "\tfload %d\n", index);
-    //             }
-    //         }
-    //         /* global */
-    //         else{
-    //             if(!strcmp(type, "int")){   // int
-    //                 sprintf(tmp_str, "\tgetstatic compiler_hw3/%s I\n", name);
-    //             }
-    //             else if(!strcmp(type, "float")){    // float
-    //                 sprintf(tmp_str, "\tgetstatic compiler_hw3/%s F\n", name);
-    //             }
-    //         }
-    //     }
-    //     strcat(out_str, tmp_str);
-    //     name = strtok(NULL, delim);
-    // }
     /* get attribute and return type */
     char attribute[10];
     char ret_type[10];
