@@ -15,6 +15,8 @@ int syn_err_flag = 0;
 char error_id[50];
 int scope_num = 0;
 int islastzero = 0;
+int isfunc = 0;
+int printfunc = 0;
 
 char constants[50] = "NULL";
 char last_type[10] = "NULL";
@@ -95,7 +97,7 @@ void j_assign(char* id, char* left_type, char* right_type);
 void j_global_var_declaration(char* id, char* value, char* constant_type);
 void j_local_var_declaration(char* id, char* value, char* constant_type);
 void j_func_declaration(char* id, char* return_type, char* parameters);
-void j_func_call(char* id, char* parameter);
+void j_func_call(char* id);
 void j_print(char* item, char *type);
 
 %}
@@ -129,10 +131,10 @@ void j_print(char* item, char *type);
 /* Nonterminal with return, which need to sepcify type */
 // %type <f_val> stat compound_statement expression_statement initializer print_func
 %type <string> type_specifier declaration_specifiers direct_declarator declarator func_declarator declaration init_declarator_list init_declarator initializer
-%type <string> function_definition parameter_list parameter_declaration
+%type <string> function_definition parameter_list parameter_declaration assignment_operator selection_statement
 %type <string> postfix_expression primary_expression unary_expression multiplicative_expression
 %type <string> additive_expression relational_expression equality_expression  and_expression inclusive_or_expression exclusive_or_expression
-%type <string> logical_and_expression logical_or_expression conditional_expression assignment_expression
+%type <string> logical_and_expression logical_or_expression conditional_expression assignment_expression jump_statement
 %type <string> initializer_list id_stat print_statement statement argument_expression_list expression_statement expression
 /* Yacc will start at this nonterminal */
 %start translation_unit
@@ -153,7 +155,8 @@ function_definition
     : declaration_specifiers declarator declaration_list compound_statement
     /* normal function declaration and definition */
     | declaration_specifiers func_declarator    {   /* split the string that contains ID and parameter list */
-                                                    char *temp; 
+                                                    char *temp;
+                                                    // printf("$2 %s\n", $2);
                                                     temp = strtok($2, ":");
                                                     /* ID */
                                                     $2 = temp;
@@ -177,12 +180,16 @@ function_definition
                                                     }
                                                     /* return 0, new function, insert the symbol */
                                                     else {
-                                                        // printf("func decl %s %s %s\n", $1, $2, temp);
+                                                        char tmp[20];
+                                                        if(temp == NULL)                                                        {
+                                                            strcpy(tmp, "NULL");
+                                                        }
+                                                        else strcpy(tmp, temp);
                                                         strcpy(func_struct.id, $2);
                                                         strcpy(func_struct.type, $1);
-                                                        j_func_declaration($2, $1, temp);
-                                                        insert_symbol($2, "function", $1, scope_num, temp, "NULL");
-                                                        insert_function($2, $1, temp);
+                                                        j_func_declaration($2, $1, tmp);
+                                                        insert_symbol($2, "function", $1, scope_num, tmp, "NULL");
+                                                        insert_function($2, $1, tmp);
                                                     }    
                                                 } compound_statement {  // printf("%s\n", func_struct.type);
                                                                         if(!strcmp(func_struct.type, "I"))
@@ -286,24 +293,43 @@ declaration
                                                                         strcpy(constants, "NULL");
                                                                     }
                                                                 }
-    | id_stat ASGN assignment_expression SEMICOLON  {   // printf("here %s %s\n", $1, $3);
+    | id_stat ASGN assignment_expression SEMICOLON  {   // printf("here %s %s %d\n", $1, $3, isfunc);
                                                         char type[20];
                                                         char out_str[200];
                                                         search_type($1, scope_num, type);
                                                         int index = search_index($1, scope_num);
-                                                        if(!strcmp(type, "I") && !strcmp($3, "I"))
-                                                            j_store_var($1, index, type, scope_num);
-                                                        else if(!strcmp(type, "F") && !strcmp($3, "F"))
-                                                            j_store_var($1, index, type, scope_num);
-                                                        else if(!strcmp(type, "F") && !strcmp($3, "I")){
-                                                            gencode_function("\ti2f\n");
-                                                            j_store_var($1, index, type, scope_num);
+                                                        if(!isfunc){                    
+                                                            if(!strcmp(type, "I") && !strcmp($3, "I"))
+                                                                j_store_var($1, index, type, scope_num);
+                                                            else if(!strcmp(type, "F") && !strcmp($3, "F"))
+                                                                j_store_var($1, index, type, scope_num);
+                                                            else if(!strcmp(type, "F") && !strcmp($3, "I")){
+                                                                gencode_function("\ti2f\n");
+                                                                j_store_var($1, index, type, scope_num);
+                                                            }
+                                                            else if(!strcmp(type, "I") && !strcmp($3, "F")){
+                                                                gencode_function("\tf2i\n");
+                                                                j_store_var($1, index, type, scope_num);
+                                                            }
                                                         }
-                                                        else if(!strcmp(type, "I") && !strcmp($3, "F")){
-                                                            gencode_function("\tf2i\n");
-                                                            j_store_var($1, index, type, scope_num);
+                                                        else{
+                                                            if(!strcmp(type, "I") && !strcmp(func_struct.type, "I"))
+                                                                j_store_var($1, index, type, scope_num);
+                                                            else if(!strcmp(type, "F") && !strcmp(func_struct.type, "F"))
+                                                                j_store_var($1, index, type, scope_num);
+                                                            else if(!strcmp(type, "F") && !strcmp(func_struct.type, "I")){
+                                                                gencode_function("\ti2f\n");
+                                                                j_store_var($1, index, type, scope_num);
+                                                            }
+                                                            else if(!strcmp(type, "I") && !strcmp(func_struct.type, "F")){
+                                                                gencode_function("\tf2i\n");
+                                                                j_store_var($1, index, type, scope_num);
+                                                            }
                                                         }
                                                     }
+    | id_stat postfix_expression SEMICOLON  {   
+                                                j_func_call(func_struct.id);                               
+                                            }
     ;
 
 identifier_list
@@ -336,12 +362,12 @@ compound_statement
 
 expression_statement
     : COMMA
-    | expression SEMICOLON  { $$ = $1; printf("expr stmt %s %s\n", $1, left_var); }
+    | expression SEMICOLON  { $$ = $1; /*printf("expr stmt %s %s\n", $1, left_var);*/ }
     ;
 
 selection_statement
-    : IF LB expression RB statement
-    | IF LB expression RB statement ELSE statement
+    : IF LB expression RB statement     { /*printf("select %s\n", $3);*/ }
+    | IF LB expression RB statement ELSE statement  {}
     ;
 
 iteration_statement
@@ -351,10 +377,23 @@ iteration_statement
     ;
 
 jump_statement
-    : CONT SEMICOLON
-    | BREAK SEMICOLON
-    | RET SEMICOLON
-    | RET expression SEMICOLON
+    : CONT SEMICOLON    {}
+    | BREAK SEMICOLON   {}
+    | RET SEMICOLON     {}
+    | RET expression SEMICOLON  {   // printf("%s %s\n", $2, func_struct.type); 
+                                    char temp[50];
+                                    strcpy(temp, strdup($2));
+                                    if(!strcmp(func_struct.type, "I") && !strcmp(temp, "I")){
+                                    }
+                                    else if(!strcmp(func_struct.type, "F") && !strcmp(temp, "F")){
+                                    }
+                                    else if(!strcmp(func_struct.type, "I") && !strcmp(temp, "F")){
+                                        gencode_function("\tf2i\n");
+                                    }
+                                    else if(!strcmp(func_struct.type, "F") && !strcmp(temp, "I")){
+                                        gencode_function("\tif2f\n");
+                                    }
+                                }
     ;
 
 print_statement
@@ -455,8 +494,8 @@ logical_and_expression
     ;
 
 assignment_expression
-    : conditional_expression    { $$ = $1; /*printf("assign %s\n", $$);*/ }
-    | unary_expression assignment_operator assignment_expression   { printf("ass %s %s\n", $1, $3); }
+    : conditional_expression    { $$ = $1; /*printf("con %s\n", $$);*/ }
+    | unary_expression assignment_operator assignment_expression   { /*printf("ass %s %s\n", $1, $3);*/ }
     ;
 
 initializer_list
@@ -469,19 +508,43 @@ inclusive_or_expression
     ;
 
 unary_expression
-    : postfix_expression        { $$ = $1; printf("unary %s\n", $$); }
+    : postfix_expression        {   $$ = $1;
+                                    // printf("unary %s %s\n", func_struct.id, func_struct.type);
+                                    if(printfunc){
+                                        j_func_call(func_struct.id);
+                                        printfunc = 0;
+                                    }
+                                }
     | INC unary_expression      {}
     | DEC unary_expression      {}
     | unary_operator unary_expression   {}
     ;
 
 assignment_operator
-    : ASGN
-    | ADDASGN
-    | SUBASGN
-    | MULASGN
-    | DIVASGN
-    | MODASGN
+    : ASGN      {   char temp[10];
+                    strcpy(temp, "A");
+                    $$ = temp;
+                }
+    | ADDASGN   {   char temp[10];
+                    strcpy(temp, "AA");
+                    $$ = temp;
+                }
+    | SUBASGN   {   char temp[10];
+                    strcpy(temp, "SA");
+                    $$ = temp;
+                }
+    | MULASGN   {   char temp[10];
+                    strcpy(temp, "MA");
+                    $$ = temp;
+                }
+    | DIVASGN   {   char temp[10];
+                    strcpy(temp, "DA");
+                    $$ = temp;
+                }
+    | MODASGN   {   char temp[10];
+                    strcpy(temp, "MDA");
+                    $$ = temp;
+                }
     ;
 
 exclusive_or_expression
@@ -491,7 +554,7 @@ exclusive_or_expression
 postfix_expression
     : primary_expression        {   /* check ID declared or not */
                                     if($1 != NULL) {
-                                        printf("post %s\n", $1);
+                                        // printf("post %s\n", $1);
                                         char temp[50];
                                         strcpy(temp, $1);
                                         int len = strlen(temp);
@@ -502,9 +565,10 @@ postfix_expression
                                             len = strlen(constants);
                                         }
                                         else if(!strcmp($1, "I") || !strcmp($1, "F") || !strcmp($1, "S")){
-                                            printf("in postfix\n");
+                                            // printf("in postfix\n");
                                         }
                                         else if(!lookup_symbol($1, scope_num, 1)){
+                                            // printf("here?\n");
                                             // undeclared variable
                                             sem_err_flag = 2;
                                             strcpy(error_id, $1);
@@ -513,19 +577,31 @@ postfix_expression
                                     }                    
                                 }
     | postfix_expression LSB expression RSB
-    | postfix_expression LB RB
-    | postfix_expression LB argument_expression_list RB {   /* check function name declared or not */
+    | postfix_expression LB RB                          {   /* check function name declared or not */
                                                             if($1 != NULL) {
-                                                                if(!lookup_symbol($1, scope_num, 3)){
+                                                                // printf("her %s %s\n", func_struct.id, func_struct.type);
+                                                                if(!lookup_symbol(func_struct.id, scope_num, 3)){
                                                                     // undeclared function
                                                                     sem_err_flag = 3;
                                                                     strcpy(error_id, $1);
                                                                 }
                                                             }
+                                                        }
+    | postfix_expression LB argument_expression_list RB {   /* check function name declared or not */
+                                                            if($1 != NULL) {
+                                                                // printf("here %s %s\n", $1, $3);
+                                                                // printf("her %s %s\n", func_struct.id, func_struct.type);
+                                                                if(!lookup_symbol(func_struct.id, scope_num, 3)){
+                                                                    // undeclared function
+                                                                    sem_err_flag = 3;
+                                                                    strcpy(error_id, $1);
+                                                                }
+
+                                                            }
                                                             if($3 != NULL){
                                                                 // printf("post %s\n", $3);
-                                                                j_func_call(strdup($1), strdup($3));
                                                             }
+                                                            printfunc = 1;
                                                         }
     | postfix_expression INC
     | postfix_expression DEC
@@ -542,25 +618,31 @@ and_expression
     ;
 
 primary_expression
-    : ID                        {   // $$ = strdup(yytext);
+    : ID                        {   
                                     // printf("primary %s\n", yytext);
                                     if(!lookup_symbol(yytext, scope_num, 1)){
                                         // undeclared variable
                                         sem_err_flag = 2;
                                         strcpy(error_id, yytext);
                                     }
-                                    int type = j_load_var(yytext);
-                                    // printf("type %d\n", type);
-                                    char temp[10];
-                                    if(type == 0) strcpy(temp, "I");
-                                    else if(type == 1) strcpy(temp, "F");
-                                    else if(type == 2) strcpy(temp, "S");
-                                    else if(type == 3) strcpy(temp, "B");
-                                    $$ = temp;
-                                    strcpy(left_var, yytext);
+                                    if(!isfunc){
+                                        int type = j_load_var(yytext);
+                                        // printf("type %d\n", type);
+                                        char temp[10];
+                                        if(type == 0) strcpy(temp, "I");
+                                        else if(type == 1) strcpy(temp, "F");
+                                        else if(type == 2) strcpy(temp, "S");
+                                        else if(type == 3) strcpy(temp, "B");
+                                        $$ = temp;
+                                        strcpy(left_var, yytext);
+                                    }
+                                    else {
+                                        
+                                        $$ = strdup(yytext);
+                                    }
                                 }
     | I_CONST                   {   strcpy(constants, strdup(yytext));
-                                    // printf("%s\n", constants);
+                                    // printf("I CON %s\n", constants);
                                     char temp[50];
                                     if(scope_num > 0){
                                         sprintf(temp, "\tldc %s\n", strdup(yytext));
@@ -632,7 +714,7 @@ primary_expression
                                     }
                                     $$ = temp;
                                 }
-    | LB expression RB          { ; }
+    | LB expression RB          
     ;
 
 argument_expression_list
@@ -648,17 +730,17 @@ argument_expression_list
     ;
 
 equality_expression
-    : relational_expression                             { $$ = $1; /*printf("equal %s\n", $$);*/ }
-    | equality_expression EQ relational_expression
-    | equality_expression NE relational_expression
+    : relational_expression                             { $$ = $1; /*printf("equal rel %s\n", $$);*/ }
+    | equality_expression EQ relational_expression      { /*printf("== %s %s\n", $1, $3);*/ }
+    | equality_expression NE relational_expression      { /*printf("!= %s %s\n", $1, $3);*/ }
     ;
 
 relational_expression
     : additive_expression                               { $$ = $1; /*printf("rel %s\n", $$);*/ }
-    | relational_expression LT additive_expression
-    | relational_expression MT additive_expression
-    | relational_expression LTE additive_expression
-    | relational_expression MTE additive_expression
+    | relational_expression LT additive_expression      { /*printf("< %s %s\n", $1, $3);*/ }
+    | relational_expression MT additive_expression      { /*printf("> %s %s\n", $1, $3);*/ }
+    | relational_expression LTE additive_expression     { /*printf("<= %s %s\n", $1, $3);*/ }
+    | relational_expression MTE additive_expression     { /*printf(">= %s %s\n", $1, $3);*/ }
     ;
 
 additive_expression
@@ -690,8 +772,8 @@ additive_expression
     ;
 
 multiplicative_expression
-    : primary_expression                                {   $$ = $1; /*printf("mul %s\n", $$);*/ strcpy(last_type, $1); push_stack($1); }
-    | multiplicative_expression MUL primary_expression  {   // printf("* %s %s\n", last_type, $3); 
+    : unary_expression                                {   $$ = $1; /*printf("mul %s\n", $$);*/ strcpy(last_type, $1); push_stack($1); }
+    | multiplicative_expression MUL unary_expression  {   // printf("* %s %s\n", last_type, $3); 
                                                             char tmp[10];
                                                             pop_stack(tmp);
                                                             // printf("pop stack %s\n", tmp);
@@ -703,7 +785,7 @@ multiplicative_expression
                                                             $$ = temp;
                                                             // printf("mul type %s\n", $$);
                                                         }
-    | multiplicative_expression DIV primary_expression  {   // printf("/ %s %s\n", last_type, $3); 
+    | multiplicative_expression DIV unary_expression  {   // printf("/ %s %s\n", last_type, $3); 
                                                             char tmp[10];
                                                             pop_stack(tmp);
                                                             // printf("pop stack %s\n", tmp);
@@ -715,7 +797,7 @@ multiplicative_expression
                                                             $$ = temp;
                                                             // printf("div type %s\n", $$);
                                                         }
-    | multiplicative_expression MOD primary_expression  {   // printf("%% %s %s\n", last_type, $3); 
+    | multiplicative_expression MOD unary_expression  {   // printf("%% %s %s\n", last_type, $3); 
                                                             char tmp[10];
                                                             pop_stack(tmp);
                                                             // printf("pop stack %s\n", tmp);
@@ -878,7 +960,7 @@ void insert_symbol(char *name, char *kind, char *type, int scope, char *attribut
 /* insert new function to function table */
 void insert_function(char* name, char* type, char* attribute){
     struct functions *temp, *new_function;
-
+    // printf("%s %s %s\n", name, type, attribute);
     temp = func_table;
     while(temp->next != NULL)
         temp = temp->next;
@@ -886,16 +968,16 @@ void insert_function(char* name, char* type, char* attribute){
     new_function = (struct functions *)malloc(sizeof(struct functions));
     strcpy(new_function->name, name);
 
-    if(!strcmp(type, "int"))    strcpy(new_function->type, "I");
-    else if(!strcmp(type, "float")) strcpy(new_function->type, "F");
-    else if(!strcmp(type, "void"))  strcpy(new_function->type, "V");
+    if(!strcmp(type, "I"))    strcpy(new_function->type, "I");
+    else if(!strcmp(type, "F")) strcpy(new_function->type, "F");
+    else if(!strcmp(type, "V"))  strcpy(new_function->type, "V");
     
-    if(attribute == NULL) strcpy(new_function->attribute, "[Ljava/lang/String;");
+    if(attribute == NULL || !strcmp(attribute, "NULL")) strcpy(new_function->attribute, "V");
     else {
-        analyze_parameters(attribute);
         strcpy(new_function->attribute, attribute);
     }
 
+    // printf("%s\n", attribute);
     new_function->index = temp->index + 1;
     new_function->next = NULL;
     temp->next = new_function;
@@ -913,7 +995,7 @@ int lookup_symbol(char *id, int scope, int mode) {  // mode 0: redeclared variab
                                                     //      2: redeclared function 3: undeclared function
     struct symbols *temp;
     int existed = 0, cur_scope = scope;
-
+    isfunc = 0;
     if(!mode || mode == 2){
         temp = &table[scope];
         if(table[scope].symbol_num == 0){
@@ -923,6 +1005,13 @@ int lookup_symbol(char *id, int scope, int mode) {  // mode 0: redeclared variab
             while(temp != NULL){
                 /* if this is a variable already existed */
                 if(!strcmp(temp->name, id)){
+                    if(!strcmp(temp->kind, "function")){
+                        // printf("is func\n");
+                        strcpy(func_struct.id, temp->name);
+                        strcpy(func_struct.type, temp->type);
+                        isfunc = 1;
+                    }
+                    else isfunc = 0;
                     existed = 1;
                     break;
                 }
@@ -942,6 +1031,13 @@ int lookup_symbol(char *id, int scope, int mode) {  // mode 0: redeclared variab
                     /* if this is a function name and it is undfined */
                     if(!temp->defined) existed = 2;  
                     else existed = 1;
+                    if(!strcmp(temp->kind, "function")){
+                        // printf("is func\n");
+                        strcpy(func_struct.id, temp->name);
+                        strcpy(func_struct.type, temp->type);
+                        isfunc = 1;
+                    }
+                    else isfunc = 0;
                     break;
                 }
                 temp = temp->next;
@@ -1126,14 +1222,17 @@ void analyze_parameters(char* attribute){
     pch = strtok(temp, delim);
     while(pch != NULL){
         // printf("%s\n", pch);
-        if(!strcmp(pch, "int") || !strcmp(pch, "int,")){
+        if(!strcmp(pch, "I") || !strcmp(pch, "I,")){
             strcat(attribute, "I");
         }
-        else if(!strcmp(pch, "float") || !strcmp(pch, "float,")){
+        else if(!strcmp(pch, "F") || !strcmp(pch, "F,")){
             strcat(attribute, "F");
         }
-        else if(!strcmp(pch, "string") || !strcmp(pch, "string,")){
+        else if(!strcmp(pch, "S") || !strcmp(pch, "S, ")){
             strcat(attribute, "Ljava/lang/String;");
+        }
+        else if(!strcmp(pch, "B") || !strcmp(pch, "B, ")){
+            strcat(attribute, "I");
         }
         pch = strtok(NULL, delim);
     }
@@ -1174,16 +1273,12 @@ char* casting(char* value, int type){
     
 }
 
-// char* type_to_str(int type){
-
-// }
-
 int j_load_var(char* id){
     struct symbols *temp;
     char out_str[200];
     int type = -1;
     int scope = scope_num, index;
-
+    
     while(scope >= 0){
         temp = &table[scope];
         if(table[scope].symbol_num == 0){
@@ -1437,11 +1532,13 @@ void j_func_declaration(char* id, char* return_type, char* parameters){
     char para_type[50];
     char ret_type[10];
     /* parameters */
-    if(parameters != NULL){
+    if(!strcmp(parameters, "NULL")){
+        strcpy(para_type, "[Ljava/lang/String;");
+    }
+    else{
         strcpy(para_type, parameters);        
         analyze_parameters(para_type);
     }
-    else    strcpy(para_type, "[Ljava/lang/String;");
     /* return type */
     if(!strcmp(return_type, "I")) strcpy(ret_type, "I");
     else if(!strcmp(return_type, "F"))  strcpy(ret_type, "F");
@@ -1451,59 +1548,60 @@ void j_func_declaration(char* id, char* return_type, char* parameters){
     sprintf(out_str, ".method public static %s(%s)%s\n.limit stack 50\n.limit locals 50\n", id, para_type, ret_type);
     // printf("%s\n", out_str);
     gencode_function(out_str);
+    strcpy(parameters, para_type);
 }
 
-void j_func_call(char* id, char* parameter){
+void j_func_call(char* id){
     char out_str[300];
-    strcpy(out_str, "");
+    // strcpy(out_str, "");
     // printf("in func %s %s\n", id, parameter);
     /* analyze the parameters */
-    char temp[50];
-    strcpy(temp, parameter);
-    char *delim = ":";
-    char *name;
-    name = strtok(temp, delim);
-    char tmp_str[150];
-    while(name != NULL){
-        // printf("name %s\n", name);
-        /* constants */
-        if(isdigit(name[0])){
-            sprintf(tmp_str, "\tldc %s\n", name);
-        }
-        /* variable */
-        else{
-            // printf("variable %d\n", scope_num);
-            /* local */
-            int index = search_index(name, scope_num);
-            char type[10];
-            search_type(name, scope_num, type);
-            if(index >= 0){
-                if(!strcmp(type, "int")){   // int
-                    sprintf(tmp_str, "\tiload %d\n", index);
-                }
-                else if(!strcmp(type, "float")){    // float
-                    sprintf(tmp_str, "\tfload %d\n", index);
-                }
-            }
-            /* global */
-            else{
-                if(!strcmp(type, "int")){   // int
-                    sprintf(tmp_str, "\tgetstatic compiler_hw3/%s I\n", name);
-                }
-                else if(!strcmp(type, "float")){    // float
-                    sprintf(tmp_str, "\tgetstatic compiler_hw3/%s F\n", name);
-                }
-            }
-        }
-        strcat(out_str, tmp_str);
-        name = strtok(NULL, delim);
-    }
+    // char temp[50];
+    // strcpy(temp, parameter);
+    // char *delim = ":";
+    // char *name;
+    // name = strtok(temp, delim);
+    // char tmp_str[150];
+    // while(name != NULL){
+    //     // printf("name %s\n", name);
+    //     /* constants */
+    //     if(isdigit(name[0])){
+    //         sprintf(tmp_str, "\tldc %s\n", name);
+    //     }
+    //     /* variable */
+    //     else{
+    //         // printf("variable %d\n", scope_num);
+    //         /* local */
+    //         int index = search_index(name, scope_num);
+    //         char type[10];
+    //         search_type(name, scope_num, type);
+    //         if(index >= 0){
+    //             if(!strcmp(type, "int")){   // int
+    //                 sprintf(tmp_str, "\tiload %d\n", index);
+    //             }
+    //             else if(!strcmp(type, "float")){    // float
+    //                 sprintf(tmp_str, "\tfload %d\n", index);
+    //             }
+    //         }
+    //         /* global */
+    //         else{
+    //             if(!strcmp(type, "int")){   // int
+    //                 sprintf(tmp_str, "\tgetstatic compiler_hw3/%s I\n", name);
+    //             }
+    //             else if(!strcmp(type, "float")){    // float
+    //                 sprintf(tmp_str, "\tgetstatic compiler_hw3/%s F\n", name);
+    //             }
+    //         }
+    //     }
+    //     strcat(out_str, tmp_str);
+    //     name = strtok(NULL, delim);
+    // }
     /* get attribute and return type */
     char attribute[10];
     char ret_type[10];
     lookup_function(id, ret_type, attribute);
-    sprintf(tmp_str, "\tinvokestatic compiler_hw3/%s(%s)%s\n", id, attribute, ret_type);
-    strcat(out_str, tmp_str);
+    sprintf(out_str, "\tinvokestatic compiler_hw3/%s(%s)%s\n", id, attribute, ret_type);
+    // strcat(out_str, tmp_str);
     gencode_function(out_str);
 }
 
