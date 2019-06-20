@@ -18,6 +18,7 @@ int islastzero = 0;
 
 char constants[50] = "NULL";
 char last_type[10] = "NULL";
+char left_var[20] = "NULL";
 
 FILE *file; // To generate .j file for Jasmin
 
@@ -156,7 +157,7 @@ function_definition
                                                     temp = strtok($2, ":");
                                                     /* ID */
                                                     $2 = temp;
-                                                    printf("%s\n", $2);
+                                                    // printf("%s\n", $2);
                                                     /* parameters */
                                                     temp = strtok(NULL, ":");
                                                     /* lookup */
@@ -176,14 +177,14 @@ function_definition
                                                     }
                                                     /* return 0, new function, insert the symbol */
                                                     else {
-                                                        printf("func decl %s %s %s\n", $1, $2, temp);
+                                                        // printf("func decl %s %s %s\n", $1, $2, temp);
                                                         strcpy(func_struct.id, $2);
                                                         strcpy(func_struct.type, $1);
                                                         j_func_declaration($2, $1, temp);
                                                         insert_symbol($2, "function", $1, scope_num, temp, "NULL");
                                                         insert_function($2, $1, temp);
                                                     }    
-                                                } compound_statement {  printf("%s\n", func_struct.type);
+                                                } compound_statement {  // printf("%s\n", func_struct.type);
                                                                         if(!strcmp(func_struct.type, "I"))
                                                                             fprintf(file, "\tireturn\n.end method\n");
                                                                         else if(!strcmp(func_struct.type, "F"))
@@ -245,7 +246,7 @@ func_declarator
     ;
 
 direct_declarator
-    : ID                { $$ = strdup(yytext); printf("dir %s\n", yytext); }
+    : ID                { $$ = strdup(yytext); /*printf("dir %s\n", yytext);*/ }
     | LB declarator RB  { ; }
     | direct_declarator LSB conditional_expression RSB
     | direct_declarator LSB RSB
@@ -259,7 +260,7 @@ declaration
     : declaration_specifiers SEMICOLON
     | declaration_specifiers init_declarator_list SEMICOLON     {   /* variable declaration */
                                                                     int result = lookup_symbol($2, scope_num, 0);
-                                                                    printf("decl %s\n", $2);
+                                                                    // printf("decl %s\n", $2);
                                                                     // printf("declaration %s %s %d\n", $1, $2, scope_num);
                                                                     if(result){
                                                                         // redeclared variable
@@ -270,13 +271,13 @@ declaration
                                                                         insert_symbol($2, "variable", $1, scope_num, "NULL", constants);
                                                                         /* global variable declaration */
                                                                         if(scope_num == 0){
-                                                                            printf("global variable\n");
+                                                                            // printf("global variable\n");
                                                                             // generate code
                                                                             j_global_var_declaration($2, constants, $1);
                                                                         }
                                                                         /* local variable declaration */
                                                                         else{
-                                                                            printf("local variable\n");
+                                                                            // printf("local variable\n");
                                                                             //printf("decl id_struct %s %s %s\n", $1, id_struct.id, id_struct.value);
                                                                             
                                                                             j_local_var_declaration($2, id_struct.value, $1);
@@ -285,6 +286,24 @@ declaration
                                                                         strcpy(constants, "NULL");
                                                                     }
                                                                 }
+    | id_stat ASGN assignment_expression SEMICOLON  {   // printf("here %s %s\n", $1, $3);
+                                                        char type[20];
+                                                        char out_str[200];
+                                                        search_type($1, scope_num, type);
+                                                        int index = search_index($1, scope_num);
+                                                        if(!strcmp(type, "I") && !strcmp($3, "I"))
+                                                            j_store_var($1, index, type, scope_num);
+                                                        else if(!strcmp(type, "F") && !strcmp($3, "F"))
+                                                            j_store_var($1, index, type, scope_num);
+                                                        else if(!strcmp(type, "F") && !strcmp($3, "I")){
+                                                            gencode_function("\ti2f\n");
+                                                            j_store_var($1, index, type, scope_num);
+                                                        }
+                                                        else if(!strcmp(type, "I") && !strcmp($3, "F")){
+                                                            gencode_function("\tf2i\n");
+                                                            j_store_var($1, index, type, scope_num);
+                                                        }
+                                                    }
     ;
 
 identifier_list
@@ -295,7 +314,7 @@ identifier_list
 init_declarator_list
     : init_declarator                               {   $$ = $1; 
                                                         // printf("init_decl_list %s\n", $$);
-                                                        printf("id_struct %s %s\n", id_struct.id, id_struct.value); 
+                                                        // printf("id_struct %s %s\n", id_struct.id, id_struct.value); 
                                                     }
     | init_declarator_list COMMA init_declarator
     ;
@@ -317,7 +336,7 @@ compound_statement
 
 expression_statement
     : COMMA
-    | expression SEMICOLON  { $$ = $1; /*printf("expr stmt %s\n", $1);*/ }
+    | expression SEMICOLON  { $$ = $1; printf("expr stmt %s %s\n", $1, left_var); }
     ;
 
 selection_statement
@@ -366,7 +385,7 @@ print_statement
     ;
 
 conditional_expression
-    : logical_or_expression { $$ = $1; printf("condi %s\n", $$); }
+    : logical_or_expression { $$ = $1; /*printf("condi %s\n", $$);*/ }
     ;
 
 parameter_list
@@ -377,7 +396,7 @@ parameter_list
 
 init_declarator
     : declarator                    {   $$ = $1; 
-                                        printf("init_declarator %s\n", $1);
+                                        // printf("init_declarator %s\n", $1);
                                         strcpy(id_struct.id, $1);
                                         strcpy(id_struct.value, "NULL");
                                     }
@@ -387,14 +406,15 @@ init_declarator
                                         char c = temp[0];
                                         // asign to one item
                                         $$ = $1; 
-                                        printf("init_declarator ASGN %s %s\n", $1, $3);
+                                        // printf("init_declarator ASGN %s %s\n", $1, $3);
                                         strcpy(id_struct.id, $1);
                                         strcpy(id_struct.value, $3);
                                     }
     ;
 
 id_stat
-    : ID    {   if(!lookup_symbol(yytext, scope_num, 1)){
+    : ID    {   // printf("id_stat %s\n", yytext);
+                if(!lookup_symbol(yytext, scope_num, 1)){
                     sem_err_flag = 2;
                     strcpy(error_id, yytext);
                 }
@@ -436,7 +456,7 @@ logical_and_expression
 
 assignment_expression
     : conditional_expression    { $$ = $1; /*printf("assign %s\n", $$);*/ }
-    | unary_expression assignment_operator assignment_expression    { printf("ass %s\n", $3); }
+    | unary_expression assignment_operator assignment_expression   { printf("ass %s %s\n", $1, $3); }
     ;
 
 initializer_list
@@ -523,23 +543,24 @@ and_expression
 
 primary_expression
     : ID                        {   // $$ = strdup(yytext);
-                                    printf("primary %s\n", yytext);
+                                    // printf("primary %s\n", yytext);
                                     if(!lookup_symbol(yytext, scope_num, 1)){
                                         // undeclared variable
                                         sem_err_flag = 2;
                                         strcpy(error_id, yytext);
                                     }
                                     int type = j_load_var(yytext);
-                                    printf("type %d\n", type);
+                                    // printf("type %d\n", type);
                                     char temp[10];
                                     if(type == 0) strcpy(temp, "I");
                                     else if(type == 1) strcpy(temp, "F");
                                     else if(type == 2) strcpy(temp, "S");
                                     else if(type == 3) strcpy(temp, "B");
                                     $$ = temp;
+                                    strcpy(left_var, yytext);
                                 }
     | I_CONST                   {   strcpy(constants, strdup(yytext));
-                                    printf("%s\n", constants);
+                                    // printf("%s\n", constants);
                                     char temp[50];
                                     if(scope_num > 0){
                                         sprintf(temp, "\tldc %s\n", strdup(yytext));
@@ -641,7 +662,7 @@ relational_expression
     ;
 
 additive_expression
-    : multiplicative_expression                         { $$ = $1; printf("add %s\n", $$); strcpy(last_type, $1); push_stack($1); }
+    : multiplicative_expression                         { $$ = $1; /*printf("add %s\n", $$);*/ strcpy(last_type, $1); push_stack($1); }
     | additive_expression ADD multiplicative_expression {   // printf("here add %s %s\n", last_type, $3);
                                                             char tmp[10];
                                                             pop_stack(tmp);
@@ -652,7 +673,7 @@ additive_expression
                                                             if(!type) strcpy(temp, "I");
                                                             else if(type) strcpy(temp, "F");
                                                             $$ = temp;
-                                                            printf("add type %s\n", $$);
+                                                            // printf("add type %s\n", $$);
                                                         }
     | additive_expression SUB multiplicative_expression {   // printf("here sub %s %s\n", last_type, $3);
                                                             char tmp[10];
@@ -664,12 +685,12 @@ additive_expression
                                                             if(!type) strcpy(temp, "I");
                                                             else if(type) strcpy(temp, "F");
                                                             $$ = temp;
-                                                            printf("sub type %s\n", $$);
+                                                            // printf("sub type %s\n", $$);
                                                         }
     ;
 
 multiplicative_expression
-    : primary_expression                                {   $$ = $1; printf("mul %s\n", $$); strcpy(last_type, $1); push_stack($1); }
+    : primary_expression                                {   $$ = $1; /*printf("mul %s\n", $$);*/ strcpy(last_type, $1); push_stack($1); }
     | multiplicative_expression MUL primary_expression  {   // printf("* %s %s\n", last_type, $3); 
                                                             char tmp[10];
                                                             pop_stack(tmp);
@@ -680,7 +701,7 @@ multiplicative_expression
                                                             if(!type) strcpy(temp, "I");
                                                             else if(type) strcpy(temp, "F");
                                                             $$ = temp;
-                                                            printf("mul type %s\n", $$);
+                                                            // printf("mul type %s\n", $$);
                                                         }
     | multiplicative_expression DIV primary_expression  {   // printf("/ %s %s\n", last_type, $3); 
                                                             char tmp[10];
@@ -692,7 +713,7 @@ multiplicative_expression
                                                             if(!type) strcpy(temp, "I");
                                                             else if(type) strcpy(temp, "F");
                                                             $$ = temp;
-                                                            printf("div type %s\n", $$);
+                                                            // printf("div type %s\n", $$);
                                                         }
     | multiplicative_expression MOD primary_expression  {   // printf("%% %s %s\n", last_type, $3); 
                                                             char tmp[10];
@@ -703,7 +724,7 @@ multiplicative_expression
                                                             char temp[10];
                                                             if(!type) strcpy(temp, "I");
                                                             $$ = temp;
-                                                            printf("rem type %s\n", $$);
+                                                            // printf("rem type %s\n", $$);
                                                         }
     ;
 
@@ -797,7 +818,7 @@ void push_stack(char* type){
     new_type->next = NULL;
     new_type->prev = temp;
     count++;
-    printf("count %d\n", count);
+    // printf("count %d\n", count);
 }
 
 void pop_stack(char* type){
@@ -961,7 +982,13 @@ void dump_symbol(int scope) {
         struct symbols *temp = &table[scope];
         temp = temp->next;
 
-        printf("%-10d%-10s%-12s%-10s%-10d", index++, temp->name, temp->kind, temp->type, temp->scope);
+        printf("%-10d%-10s%-12s", index++, temp->name, temp->kind);
+        if(!strcmp(temp->type, "I"))    printf("%-10s", "int");
+        if(!strcmp(temp->type, "F"))    printf("%-10s", "float");
+        if(!strcmp(temp->type, "V"))    printf("%-10s", "void");
+        if(!strcmp(temp->type, "S"))    printf("%-10s", "string");
+        if(!strcmp(temp->type, "B"))    printf("%-10s", "bool");
+        printf("%-10d", temp->scope);
         if(strcmp(temp->attribute, "\0"))    printf("%s\n", temp->attribute);
         else printf("\n");
         /* after printed, delete and free */
@@ -1401,7 +1428,7 @@ void j_global_var_declaration(char* id, char *value, char* constant_type){
 
 
 void j_local_var_declaration(char* id, char *value, char* constant_type){
-    printf("local %s %s %s\n", constant_type, id, value);
+    // printf("local %s %s %s\n", constant_type, id, value);
     return;
 }
 
@@ -1416,9 +1443,10 @@ void j_func_declaration(char* id, char* return_type, char* parameters){
     }
     else    strcpy(para_type, "[Ljava/lang/String;");
     /* return type */
-    if(!strcmp(return_type, "int")) strcpy(ret_type, "I");
-    else if(!strcmp(return_type, "float"))  strcpy(ret_type, "F");
-    else if(!strcmp(return_type, "void"))   strcpy(ret_type, "V");
+    if(!strcmp(return_type, "I")) strcpy(ret_type, "I");
+    else if(!strcmp(return_type, "F"))  strcpy(ret_type, "F");
+    else if(!strcmp(return_type, "V"))   strcpy(ret_type, "V");
+    else if(!strcmp(return_type, "B"))   strcpy(ret_type, "I");
 
     sprintf(out_str, ".method public static %s(%s)%s\n.limit stack 50\n.limit locals 50\n", id, para_type, ret_type);
     // printf("%s\n", out_str);
@@ -1492,38 +1520,50 @@ void j_print(char* item, char *type){
         int index = search_index(item, scope_num);      // get index
         // printf("index %d\n", index);
         if(index >= 0){    // local
-            if(!strcmp(type, "int")){
+            if(!strcmp(type, "I")){
                 sprintf(out_str, "\tiload %d\n\tgetstatic java/lang/System/out Ljava/io/PrintStream;\n\tswap\n\tinvokevirtual java/io/PrintStream/println(I)V\n", index);
             }
-            else if(!strcmp(type, "float")){
+            else if(!strcmp(type, "F")){
                 sprintf(out_str, "\tfload %d\n\tgetstatic java/lang/System/out Ljava/io/PrintStream;\n\tswap\n\tinvokevirtual java/io/PrintStream/println(F)V\n", index);
             }
-            else if(!strcmp(type, "string")){
+            else if(!strcmp(type, "S")){
                 sprintf(out_str, "\taload %d\n\tgetstatic java/lang/System/out Ljava/io/PrintStream;\n\tswap\n\tinvokevirtual java/io/PrintStream/println(Ljava/lang/String;)V\n", index);
                 gencode_function(out_str);
             }
+            else if(!strcmp(type, "I")){
+                sprintf(out_str, "\tiload %d\n\tgetstatic java/lang/System/out Ljava/io/PrintStream;\n\tswap\n\tinvokevirtual java/io/PrintStream/println(I)V\n", index);
+            }
         }
         else{       // global
-            if(!strcmp(type, "int")){
+            if(!strcmp(type, "I")){
                 sprintf(out_str, "\tgetstatic compiler_hw3/%s I\n\tgetstatic java/lang/System/out Ljava/io/PrintStream;\n\tswap\n\tinvokevirtual java/io/PrintStream/println(I)V\n", item);
             }
-            else if(!strcmp(type, "float")){
+            else if(!strcmp(type, "F")){
                 sprintf(out_str, "\tgetstatic compiler_hw3/%s F\n\tgetstatic java/lang/System/out Ljava/io/PrintStream;\n\tswap\n\tinvokevirtual java/io/PrintStream/println(F)V\n", item);
             }
-            else if(!strcmp(type, "string")){
+            else if(!strcmp(type, "S")){
                 sprintf(out_str, "\tgetstatic compiler_hw3/%s Ljava/lang/String;\n\tgetstatic java/lang/System/out Ljava/io/PrintStream;\n\tswap\n\tinvokevirtual java/io/PrintStream/println(Ljava/lang/String;)V\n", item);
+            }
+            else if(!strcmp(type, "I")){
+                sprintf(out_str, "\tgetstatic compiler_hw3/%s I\n\tgetstatic java/lang/System/out Ljava/io/PrintStream;\n\tswap\n\tinvokevirtual java/io/PrintStream/println(I)V\n", item);
             }
         }
 
     }
     /* print number constants */
     else{
-        if(!strcmp(type, "int")){
+        if(!strcmp(type, "I")){
             sprintf(out_str, "\tldc %s\n\tgetstatic java/lang/System/out Ljava/io/PrintStream;\n\tswap\n\tinvokevirtual java/io/PrintStream/println(I)V\n", item);
         }
-        else if(!strcmp(type, "float")){
+        else if(!strcmp(type, "F")){
             sprintf(out_str, "\tldc %s\n\tgetstatic java/lang/System/out Ljava/io/PrintStream;\n\tswap\n\tinvokevirtual java/io/PrintStream/println(F)V\n", item);
-       }
+        }
+        else if(!strcmp(type, "B")){
+            sprintf(out_str, "\tldc %s\n\tgetstatic java/lang/System/out Ljava/io/PrintStream;\n\tswap\n\tinvokevirtual java/io/PrintStream/println(I)V\n", item);
+        }
+        else if(!strcmp(type, "S")){
+            sprintf(out_str, "\tldc %s\n\tgetstatic java/lang/System/out Ljava/io/PrintStream;\n\tswap\n\tinvokevirtual java/io/PrintStream/println(Ljava/lang/String;)V\n", item);
+        }
     }
     gencode_function(out_str);
 }

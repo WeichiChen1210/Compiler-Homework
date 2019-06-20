@@ -14,7 +14,7 @@ int main(float arg1, float arg2){
    //  int f = a + 2;
    //  int e = 10 + a * arg1;
    //  a = temp + e;
-   //  print(e);
+    print(d);
 
     return 0;
 }
